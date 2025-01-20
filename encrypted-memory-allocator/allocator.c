@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "allocator.h"
+
 
 // XOR Encryption key 
 #define XOR_KEY 0xAA
@@ -55,7 +57,7 @@ void xfree(void *ptr) {
     block->next = free_list;
     free_list = block;
 }
-
+/*
 int main() {
     // Example usage of the custom allocator
     char *data = (char*) xmalloc(20);
@@ -70,4 +72,4 @@ int main() {
     xfree(data);
 
     return 0;
-}
+}*/
