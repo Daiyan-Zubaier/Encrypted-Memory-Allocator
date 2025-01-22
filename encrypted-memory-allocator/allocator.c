@@ -3,7 +3,7 @@
 #include <string.h>
 #include "allocator.h"
 
-
+//
 // XOR Encryption key 
 #define XOR_KEY 0xAA
 
