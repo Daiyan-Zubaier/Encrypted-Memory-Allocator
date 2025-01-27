@@ -1,5 +1,7 @@
-#include <cstdint>
-#include <unistd.h> 
+#include <assert.h>
+#include <unistd.h>
+#include <list>
+#include <iostream>
 #include <windows.h>
 
 
@@ -143,6 +145,12 @@ MemBlock *first_fit(std::size_t size){
 NEXT FIT - 
 Same as first algo, but remember where we ended our previous allocation
 */
+MemBlock *next_fit(std::size_t size){
+  
+}
+
+
+
 
 
 enum class SearchMode {
