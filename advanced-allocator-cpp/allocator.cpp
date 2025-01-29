@@ -2,11 +2,9 @@
 #include <unistd.h>
 #include <list>
 #include <iostream>
-#include <windows.h>
 
 
 //intptr_t is our system architecture's word size
-
 
 struct MemBlock{
     //Info about memory block
@@ -26,6 +24,19 @@ struct MemBlock{
     */
 };
 
+MemBlock *find_block(size_t size); 
+MemBlock *get_header(intptr_t *data);
+void free(intptr_t *data);
+MemBlock *findBlock(std::size_t size);
+MemBlock *get_header(intptr_t *data); 
+void free(intptr_t *data); 
+MemBlock *findBlock(std::size_t size);
+MemBlock *first_fit(std::size_t size); 
+MemBlock *next_fit(std::size_t size);
+void resetHeap();
+
+
+
 //Start and end of the heap
 static MemBlock *heap_start = nullptr;
 static MemBlock *recent_block = heap_start;
@@ -42,33 +53,7 @@ inline std::size_t allign(std::size_t org_size){
 /*
 Allocator
 */
-intptr_t *alloc(std::size_t size){
-  size = allign(size);
 
-  //Search for free block: 
-  if (MemBlock *block = find_block(size)){
-    return block->data;
-  }
-  MemBlock *block = request_from_OS(size);
-
-  block->size = size;
-  block->used = true;
-
-  //If heap has nothing, initialize it with the ptr that points to the first memory block
-  if (heap_start == nullptr){
-    heap_start = block;
-  }
-
-  if (recent_block != nullptr){
-    recent_block->next = block;
-  }
-
-  recent_block = block;
-
-  //Gives us the mem location of the first slot to start from
-  return block->data; 
-  
-}
 
 MemBlock *get_header(intptr_t *data) {
   return (MemBlock *)((char *)data + sizeof(intptr_t) -
@@ -80,17 +65,6 @@ inline size_t alloc_size(size_t size) {
   return size + sizeof(MemBlock) - sizeof(intptr_t);
 }
 
-MemBlock *request_from_OS(size_t size) {
-  // Current heap break
-  MemBlock *block = (MemBlock *)sbrk(0);           
-  
-  //Out of memory
-  if (sbrk(alloc_size(size)) == (void *)-1) {   
-    return nullptr;
-  }
- 
-  return block;
-}
 
 /*
 FREE
@@ -195,4 +169,55 @@ void resetHeap() {
 void init(SearchMode mode) {
   searchMode = mode;
   resetHeap();
+}
+intptr_t *alloc(std::size_t size){
+  size = allign(size);
+
+  //Search for free block: 
+  if (MemBlock *block = find_block(size)){
+    return block->data;
+  }
+  MemBlock *block = request_from_OS(size);
+
+  block->size = size;
+  block->used = true;
+
+  //If heap has nothing, initialize it with the ptr that points to the first memory block
+  if (heap_start == nullptr){
+    heap_start = block;
+  }
+
+  if (recent_block != nullptr){
+    recent_block->next = block;
+  }
+
+  recent_block = block;
+
+  //Gives us the mem location of the first slot to start from
+  return block->data; 
+  
+}
+
+MemBlock *request_from_OS(size_t size) {
+  // Current heap break
+  MemBlock *block = (MemBlock *)sbrk(0);           
+  
+  //Out of memory
+  if (sbrk(alloc_size(size)) == (void *)-1) {   
+    return nullptr;
+  }
+ 
+  return block;
+}
+
+int main(){
+  //Local Test Cases
+  auto p2 = alloc(8);                        // (2)
+  auto p2b = get_header(p2);
+  assert(p2b->size == 8);
+
+  auto p3 = alloc(8);
+  auto p3b = get_header(p3);
+  assert(p3b->size == 8);
+  assert(p3b == p2b);
 }
