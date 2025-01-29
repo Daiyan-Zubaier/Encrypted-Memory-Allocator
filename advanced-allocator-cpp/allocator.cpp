@@ -30,25 +30,8 @@ struct MemBlock{
 static MemBlock *heap_start = nullptr;
 static MemBlock *recent_block = heap_start;
 
-
-//sbrk implementation for windows:
-void *sbrk(intptr_t increment) {
-    static char *heap_end = nullptr;
-    static char *prev_end = nullptr;
-
-    if (heap_end == nullptr) {
-        SYSTEM_INFO sys_info;
-        GetSystemInfo(&sys_info);
-        heap_end = (char *)VirtualAlloc(nullptr, sys_info.dwPageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-        prev_end = heap_end;
-    }
-
-    if (increment != 0) {
-        prev_end = heap_end;
-        heap_end += increment;
-    }
-
-    return prev_end;
+MemBlock *find_block(size_t size) {
+  return first_fit(size);
 }
 
 //Does memory allignment
@@ -133,7 +116,7 @@ Go through memory, find me the FIRST piece of memory unallocated,
 */
 MemBlock *first_fit(std::size_t size){
   for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
-    if (!curr->used && curr->size > size){
+    if (!curr->used && curr->size >= size){
       return curr;
     }
   }
@@ -145,8 +128,34 @@ MemBlock *first_fit(std::size_t size){
 NEXT FIT - 
 Same as first algo, but remember where we ended our previous allocation
 */
+/*
+Previously found block. Updated in next_fit(). 
+*/
+static MemBlock *last_block = heap_start; 
+
 MemBlock *next_fit(std::size_t size){
-  
+  if (last_block == nullptr){
+    last_block = heap_start;
+  }
+
+  for(MemBlock *curr = last_block; curr != nullptr; curr = curr->next){
+    if(!curr->used && curr->size >= size){
+      last_block = curr;
+      return curr;
+    }
+
+    //Circled back
+    if (curr->next == last_block) {
+      break;
+    }
+    
+    //Let's get it started again
+     if (curr->next == nullptr && last_block != heap_start) {
+      curr = heap_start; 
+    }
+  }
+  return nullptr;
+
 }
 
 
@@ -158,10 +167,6 @@ enum class SearchMode {
   NextFit,
 };
  
-/**
- * Previously found block. Updated in `nextFit`.
- */
-static MemBlock *last_block = heap_start; 
 
 /**
  * Current search mode.
