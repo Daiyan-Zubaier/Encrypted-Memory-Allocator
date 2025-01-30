@@ -24,6 +24,23 @@ struct MemBlock{
     */
 };
 
+enum class SearchMode {
+  FirstFit,
+  NextFit,
+  BestFit
+};
+
+static auto searchMode = SearchMode::FirstFit;
+//Start and end of the heap
+static MemBlock *heap_start = nullptr;
+static MemBlock *recent_block = heap_start;
+/*
+Previously found block. Updated in next_fit(). 
+*/
+static MemBlock *last_block = heap_start; 
+
+//Function Declarations
+void init(SearchMode mode);
 MemBlock *find_block(size_t size); 
 MemBlock *get_header(intptr_t *data);
 void free(intptr_t *data);
@@ -33,13 +50,19 @@ void free(intptr_t *data);
 MemBlock *findBlock(std::size_t size);
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
+MemBlock *best_fit(std::size_t size);
 void resetHeap();
+intptr_t *alloc(std::size_t size);
+MemBlock *request_from_OS(size_t size);
+MemBlock *split(MemBlock *block, std::size_t size);
+MemBlock *list_allocate(MemBlock *block, std::size_t size);
+int main();
 
 
-
-//Start and end of the heap
-static MemBlock *heap_start = nullptr;
-static MemBlock *recent_block = heap_start;
+void init(SearchMode mode) {
+  searchMode = mode;
+  resetHeap();
+}
 
 MemBlock *find_block(size_t size) {
   return first_fit(size);
@@ -47,7 +70,8 @@ MemBlock *find_block(size_t size) {
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
-    return org_size + sizeof(intptr_t) - org_size % sizeof(intptr_t);
+  return (org_size + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
+    //return org_size + sizeof(intptr_t) - org_size % sizeof(intptr_t);
 }
 
 /*
@@ -80,8 +104,16 @@ void free(intptr_t *data){
 Memory Algorithm Allocation Methods
 ------------------------------------
 */
-MemBlock *findBlock(std::size_t size) {
-  return first_fit(size);
+MemBlock *findBlock(size_t size) {
+  switch (searchMode) {
+    case SearchMode::FirstFit:
+      return first_fit(size);
+    case SearchMode::NextFit:
+      return next_fit(size);
+    case SearchMode::BestFit:
+      return best_fit(size);
+  }
+  return nullptr;
 }
 
 /*
@@ -102,10 +134,7 @@ MemBlock *first_fit(std::size_t size){
 NEXT FIT - 
 Same as first algo, but remember where we ended our previous allocation
 */
-/*
-Previously found block. Updated in next_fit(). 
-*/
-static MemBlock *last_block = heap_start; 
+
 
 MemBlock *next_fit(std::size_t size){
   if (last_block == nullptr){
@@ -124,7 +153,7 @@ MemBlock *next_fit(std::size_t size){
     }
     
     //Let's get it started again
-     if (curr->next == nullptr && last_block != heap_start) {
+     if (curr->next == nullptr) {
       curr = heap_start; 
     }
   }
@@ -133,19 +162,30 @@ MemBlock *next_fit(std::size_t size){
 }
 
 
+MemBlock *best_fit(std::size_t size){
+  std::size_t min {SIZE_MAX};
+  MemBlock *min_block {nullptr};
+
+  for(MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
+    if(!curr->used && curr->size >= size){
+      if (size < min){
+        min = size;
+        min_block = curr;
+      }
+    }
+  }
+
+  return min_block;
+}
 
 
 
-enum class SearchMode {
-  FirstFit,
-  NextFit,
-};
  
 
 /**
  * Current search mode.
  */
-static auto searchMode = SearchMode::FirstFit;
+
  
 /**
  * Reset the heap to the original position.
@@ -166,10 +206,7 @@ void resetHeap() {
 /**
  * Initializes the heap, and the search mode.
  */
-void init(SearchMode mode) {
-  searchMode = mode;
-  resetHeap();
-}
+
 intptr_t *alloc(std::size_t size){
   size = allign(size);
 
@@ -210,14 +247,117 @@ MemBlock *request_from_OS(size_t size) {
   return block;
 }
 
+MemBlock *split(MemBlock *block, std::size_t size){
+  
+}
+MemBlock *list_allocate(MemBlock *block, std::size_t size){
+
+}
+
 int main(){
-  //Local Test Cases
+  // --------------------------------------
+  // Test case 1: Alignment
+  //
+  // A request for 3 bytes is aligned to 8.
+  //
+ 
+  auto p1 = alloc(3);                        // (1)
+  auto p1b = get_header(p1);
+  assert(p1b->size == sizeof(intptr_t));
+ 
+  // --------------------------------------
+  // Test case 2: Exact amount of aligned bytes
+  //
+ 
   auto p2 = alloc(8);                        // (2)
   auto p2b = get_header(p2);
   assert(p2b->size == 8);
+ 
+ 
+  puts("\nAll assertions passed!\n");
+  
+    // Init the heap, and the searching algorithm.
+  init(SearchMode::NextFit);
+  
+  // --------------------------------------
+  // Test case 3: Free the object
+  //
+  
+  free(p2);
+  assert(p2b->used == false);
 
+  // --------------------------------------
+  // Test case 4: The block is reused
+  //
+  // A consequent allocation of the same size reuses
+  // the previously freed block.
+  //
+  
   auto p3 = alloc(8);
   auto p3b = get_header(p3);
   assert(p3b->size == 8);
-  assert(p3b == p2b);
+  assert(p3b == p2b);  // Reused!
+
+  // Init the heap, and the searching algorithm.
+  init(SearchMode::NextFit);
+  
+  // --------------------------------------
+  // Test case 5: Next search start position
+  //
+  
+  // [[8, 1], [8, 1], [8, 1]]
+  alloc(8);
+  alloc(8);
+  alloc(8);
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
+  auto o1 = alloc(16);
+  auto o2 = alloc(16);
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 0], [16, 0]]
+  free(o1);
+  free(o2);
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 0]]
+  auto o3 = alloc(16);
+  
+  // Start position from o3:
+  assert(last_block == get_header(o3));
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
+  //                           ^ start here
+  //alloc(16);
+  
+  init(SearchMode::BestFit);
+ 
+  // --------------------------------------
+  // Test case 6: Best-fit search
+  //
+  
+  // [[8, 1], [64, 1], [8, 1], [16, 1]]
+  alloc(8);
+  auto z1 = alloc(64);
+  alloc(8);
+  auto z2 = alloc(16);
+  
+  // Free the last 16
+  free(z2);
+  
+  // Free 64:
+  free(z1);
+  
+  // [[8, 1], [64, 0], [8, 1], [16, 0]]
+  
+  // Reuse the last 16 block:
+  auto z3 = alloc(16);
+  assert(get_header(z3) == get_header(z2));
+  
+  // [[8, 1], [64, 0], [8, 1], [16, 1]]
+  
+  // Reuse 64, splitting it to 16, and 24 (considering header)
+  z3 = alloc(16);
+  assert(get_header(z3) == get_header(z1));
+  
+  free(z3);
+  // [[8, 1], [16, 1], [24, 0], [8, 1], [16, 1]]
 }
