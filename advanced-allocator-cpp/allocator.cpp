@@ -247,11 +247,12 @@ MemBlock *request_from_OS(size_t size) {
   return block;
 }
 
+//Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
   
 }
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
-
+  
 }
 
 int main(){
