@@ -249,8 +249,26 @@ MemBlock *request_from_OS(size_t size) {
 
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
+  /*
+  We are givne the pointer to the full free block, and the size of the block we want to allocate
+   */
+
+  std::size_t rem_size = (block->size > size) ?  (block->size - size):;
+
+  std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size};
+  MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
+
+  remain->size = rem_size;
   
+  //IRemaining block is smaller
+  if (rem_size){
+
+  }
+  else{
+
+  }
 }
+//Allocates 
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
   
 }
