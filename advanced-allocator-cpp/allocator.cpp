@@ -14,9 +14,11 @@ struct MemBlock{
     bool used; //Check if it is used
     MemBlock *next; 
 
-    //Data Marker
+    //Payload Pointer
     intptr_t data[1];
     
+    //Could add a footer 
+
     /*
     How memory looks in allocation:
     | Object Header | data[1] (1 byte) | User Data (variable size) | Buffer (for allignment) |
@@ -93,9 +95,9 @@ FREE
 void free(intptr_t *data){
   MemBlock *block = get_header(data);
 
-  // if (implement){
-  //  block = coalesce(block);
-  // }
+  if (block->next && !block->next->used){
+    block = coalesce(block);
+  }
   block->used = false;
 }
 
@@ -106,7 +108,9 @@ Coalescing, when freeing a block, check for adjacent free blocks
 This means, we won't have adjacent fragmented free blocks
 */
 MemBlock *coalesce (MemBlock *block){
-  
+  block->size += block->next->size;
+  block->next = block->next->next;
+  return block;
 }
 
 /*
