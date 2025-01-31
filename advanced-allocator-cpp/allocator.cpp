@@ -44,10 +44,8 @@ void init(SearchMode mode);
 MemBlock *find_block(size_t size); 
 MemBlock *get_header(intptr_t *data);
 void free(intptr_t *data);
-MemBlock *findBlock(std::size_t size);
+MemBlock *coalesce (MemBlock *block);
 MemBlock *get_header(intptr_t *data); 
-void free(intptr_t *data); 
-MemBlock *findBlock(std::size_t size);
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
@@ -64,9 +62,6 @@ void init(SearchMode mode) {
   resetHeap();
 }
 
-MemBlock *find_block(size_t size) {
-  return first_fit(size);
-}
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
@@ -97,14 +92,22 @@ FREE
 */
 void free(intptr_t *data){
   MemBlock *block = get_header(data);
+
+  // if (implement){
+  //  block = coalesce(block);
+  // }
   block->used = false;
+}
+
+MemBlock *coalesce (MemBlock *block){
+  
 }
 
 /*
 Memory Algorithm Allocation Methods
 ------------------------------------
 */
-MemBlock *findBlock(size_t size) {
+MemBlock *find_block(size_t size) {
   switch (searchMode) {
     case SearchMode::FirstFit:
       return first_fit(size);
@@ -214,6 +217,8 @@ intptr_t *alloc(std::size_t size){
   if (MemBlock *block = find_block(size)){
     return block->data;
   }
+
+  //Expand heap, if there is no more space in heap
   MemBlock *block = request_from_OS(size);
 
   block->size = size;
@@ -246,31 +251,35 @@ MemBlock *request_from_OS(size_t size) {
  
   return block;
 }
-
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
-  /*
-  We are givne the pointer to the full free block, and the size of the block we want to allocate
-   */
 
-  std::size_t rem_size = (block->size > size) ?  (block->size - size):;
+  std::size_t rem_size = block->size - alloc_size(size);
 
   std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size};
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
 
+  //Updating the free portion of the split
   remain->size = rem_size;
+  remain->used = false;
+  remain->next = block->next;
+
+  //Updating the now occupied portion of the split
+  block->size = size; 
+  block->used = true;
+  block->next = remain;
   
-  //IRemaining block is smaller
-  if (rem_size){
-
-  }
-  else{
-
-  }
+  
+  return block; 
 }
-//Allocates 
+
+//Allocates with the assumption: there exists space in heap
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
-  
+  //If block can be split, i.e. is the block size bigger than object header + size
+  if ((alloc_size(block->size) - size) >= sizeof(MemBlock)){
+    return split(block, size);
+  }
+  return block;
 }
 
 int main(){
