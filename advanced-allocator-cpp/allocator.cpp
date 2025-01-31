@@ -294,7 +294,7 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
 }
 
 int main(){
-  // --------------------------------------
+  // -------------------------------------
   // Test case 1: Alignment
   //
   // A request for 3 bytes is aligned to 8.
