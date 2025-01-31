@@ -99,6 +99,12 @@ void free(intptr_t *data){
   block->used = false;
 }
 
+/*
+Coalescing, when freeing a block, check for adjacent free blocks
+  If adjacent free block, combine current block with free block
+
+This means, we won't have adjacent fragmented free blocks
+*/
 MemBlock *coalesce (MemBlock *block){
   
 }
@@ -253,10 +259,10 @@ MemBlock *request_from_OS(size_t size) {
 }
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
+  std::size_t const hdr_size = sizeof(MemBlock);
+  std::size_t rem_size = block->size - alloc_size(size) - hdr_size;
 
-  std::size_t rem_size = block->size - alloc_size(size);
-
-  std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size};
+  std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size + hdr_size};
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
 
   //Updating the free portion of the split
@@ -276,9 +282,10 @@ MemBlock *split(MemBlock *block, std::size_t size){
 //Allocates with the assumption: there exists space in heap
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
   //If block can be split, i.e. is the block size bigger than object header + size
-  if ((alloc_size(block->size) - size) >= sizeof(MemBlock)){
+  if (alloc_size(block->size) >= sizeof(MemBlock) + size){
     return split(block, size);
   }
+  block->used = true;
   return block;
 }
 
