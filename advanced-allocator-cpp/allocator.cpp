@@ -29,7 +29,8 @@ struct MemBlock{
 enum class SearchMode {
   FirstFit,
   NextFit,
-  BestFit
+  BestFit,
+  FreeList
 };
 
 static auto searchMode = SearchMode::FirstFit;
