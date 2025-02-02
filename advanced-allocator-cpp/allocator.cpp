@@ -14,20 +14,18 @@ struct MemBlock{
     bool used; //Check if it is used
     MemBlock *next; 
 
-    union{
-      //Payload Pointer
-      intptr_t data[1]; 
-
-      struct {
-        MemBlock *pred;
-        MemBlock *succ;
-      } freeBlock; //Instance of an unnamed struct
-    };
+    //Payload Pointer
+    intptr_t data[1];
+    
     //Could add a footer 
 
+    /*
+    How memory looks in allocation:
+    | Object Header | data[1] (1 byte) | User Data (variable size) | Buffer (for allignment) |
+    the slot for data[1] is occupied by the user data
+    */
 };
 
-//'Labelling' search modes
 enum class SearchMode {
   FirstFit,
   NextFit,
@@ -39,11 +37,11 @@ static auto searchMode = SearchMode::FirstFit;
 //Start and end of the heap
 static MemBlock *heap_start = nullptr;
 static MemBlock *recent_block = heap_start;
-static MemBlock *free_list_head = nullptr; 
 /*
 Previously found block. Updated in next_fit(). 
 */
 static MemBlock *last_block = heap_start; 
+static std::list<MemBlock*> free_list;
 
 //Function Declarations
 void init(SearchMode mode);
@@ -102,26 +100,13 @@ void free(intptr_t *data){
   if (block->next && !block->next->used){
     block = coalesce(block);
   }
-  
   block->used = false;
 
-  if (!(searchMode == SearchMode::FreeList)){
-    return;
+  if (searchMode == SearchMode::FreeList) {
+    free_list.push_back(block);
   }
-
-  //Free list Linked list has not been created yet
-  if (free_list_head == nullptr){
-    block->freeBlock.pred = nullptr;
-    block->freeBlock.succ = nullptr; 
-    free_list_head = block; 
-  }
-  //No previous 
-  else if (block->freeBlock.pred == nullptr){
-    freeBlock.pred = free_list_head; 
-    
-  }
-  
 }
+
 
 /*
 Coalescing, when freeing a block, check for adjacent free blocks
@@ -147,6 +132,8 @@ MemBlock *find_block(size_t size) {
       return next_fit(size);
     case SearchMode::BestFit:
       return best_fit(size);
+    case SearchMode::FreeList:
+      return exp_free_list(size);
   }
   return nullptr;
 }
@@ -196,15 +183,11 @@ MemBlock *next_fit(std::size_t size){
 
 }
 
-/*
-BEST FIT - 
-Fit block with the best size
-*/
+
 MemBlock *best_fit(std::size_t size){
   std::size_t min {SIZE_MAX};
   MemBlock *min_block {nullptr};
 
-  //Loop through all blocks in heap
   for(MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
     if(!curr->used && curr->size >= size){
       if (size < min){
@@ -213,16 +196,23 @@ MemBlock *best_fit(std::size_t size){
       }
     }
   }
-  //Returns the smallest valid block
+
   return min_block;
 }
 
 /*
-Explicit Free List - 
-Keep a list of free blocks, store free blocks in a list
+Explicit Free List Algorithm
+  Tracks all free blocks in a list, makes allocation FAST
 */
-MemBlock *free_list(std::size_t size){
-  
+MemBlock *exp_free_list(size_t size) {
+  for (const auto &block : free_list) {
+    if (block->size < size) {
+      continue;
+    }
+    free_list.remove(block);
+    return list_allocate(block, size);
+  }
+  return nullptr;
 }
 
  
@@ -242,9 +232,9 @@ void resetHeap() {
   last_block = nullptr;
 }
  
-/*
-Initializes the heap, and the search mode.
-*/
+/**
+ * Initializes the heap, and the search mode.
+ */
 
 intptr_t *alloc(std::size_t size){
   size = allign(size);
@@ -320,6 +310,7 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
 }
 
 int main(){
+  // --------------------------------------
   // -------------------------------------
   // Test case 1: Alignment
   //
