@@ -4,7 +4,7 @@
 #include <iostream>
 
 
-//uintptr_t  is our system architecture's word size
+//intptr_t is our system architecture's word size
 
 struct MemBlock{
     //Info about memory block
@@ -16,7 +16,7 @@ struct MemBlock{
 
     union{
       //Payload Pointer
-      uintptr_t data[1]; 
+      intptr_tdata[1]; 
 
       struct {
         MemBlock *pred;
@@ -39,23 +39,23 @@ static auto searchMode = SearchMode::FirstFit;
 //Start and end of the heap
 static MemBlock *heap_start = nullptr;
 static MemBlock *recent_block = heap_start;
+static MemBlock *free_list_head = nullptr; 
 /*
 Previously found block. Updated in next_fit(). 
 */
-static MemBlock *last_block = heap_start; 
 
 //Function Declarations
 void init(SearchMode mode);
 MemBlock *find_block(size_t size); 
-MemBlock *get_header(uintptr_t  *data);
-void free(uintptr_t  *data);
+MemBlock *get_header(intptr_t *data);
+void free(intptr_t *data);
 MemBlock *coalesce (MemBlock *block);
-MemBlock *get_header(uintptr_t  *data); 
+MemBlock *get_header(intptr_t *data); 
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
 void resetHeap();
-uintptr_t  *alloc(std::size_t size);
+intptr_t *alloc(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
@@ -70,8 +70,8 @@ void init(SearchMode mode) {
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
-  return (org_size + sizeof(uintptr_t ) - 1) & ~(sizeof(uintptr_t ) - 1);
-    //return org_size + sizeof(uintptr_t ) - org_size % sizeof(uintptr_t );
+  return (org_size + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
+    //return org_size + sizeof(intptr_t) - org_size % sizeof(intptr_t);
 }
 
 /*
@@ -79,14 +79,14 @@ Allocator
 */
 
 
-MemBlock *get_header(uintptr_t  *data) {
-  return (MemBlock *)((char *)data + sizeof(uintptr_t ) -
+MemBlock *get_header(intptr_t *data) {
+  return (MemBlock *)((char *)data + sizeof(intptr_t) -
                    sizeof(MemBlock));
 }
 
 inline size_t alloc_size(size_t size) {
   // Total size of memory block being requested minus the first slot size (data[1])
-  return size + sizeof(MemBlock) - sizeof(uintptr_t );
+  return size + sizeof(MemBlock) - sizeof(intptr_t);
 }
 
 
@@ -95,13 +95,31 @@ FREE
 ------------
 -> Writes to program that the memory block that stores the data is unused
 */
-void free(uintptr_t  *data){
+void free(intptr_t *data){
   MemBlock *block = get_header(data);
 
   if (block->next && !block->next->used){
     block = coalesce(block);
   }
+  
   block->used = false;
+
+  if (!(searchMode == SearchMode::FreeList)){
+    return;
+  }
+
+  //Free list Linked list has not been created yet
+  if (free_list_head == nullptr){
+    block->freeBlock.pred = nullptr;
+    block->freeBlock.succ = nullptr; 
+    free_list_head = block; 
+  }
+  //No previous 
+  else if (block->freeBlock.pred == nullptr){
+    freeBlock.pred = free_list_head; 
+    
+  }
+  
 }
 
 /*
@@ -177,11 +195,15 @@ MemBlock *next_fit(std::size_t size){
 
 }
 
-
+/*
+BEST FIT - 
+Fit block with the best size
+*/
 MemBlock *best_fit(std::size_t size){
   std::size_t min {SIZE_MAX};
   MemBlock *min_block {nullptr};
 
+  //Loop through all blocks in heap
   for(MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
     if(!curr->used && curr->size >= size){
       if (size < min){
@@ -190,17 +212,17 @@ MemBlock *best_fit(std::size_t size){
       }
     }
   }
-
+  //Returns the smallest valid block
   return min_block;
 }
 
-
-
- 
-
-/**
- * Current search mode.
- */
+/*
+Explicit Free List - 
+Keep a list of free blocks, store free blocks in a list
+*/
+MemBlock *free_list(std::size_t size){
+  
+}
 
  
 /**
@@ -223,7 +245,7 @@ void resetHeap() {
 Initializes the heap, and the search mode.
 */
 
-uintptr_t  *alloc(std::size_t size){
+intptr_t *alloc(std::size_t size){
   size = allign(size);
 
   //Search for free block: 
@@ -305,7 +327,7 @@ int main(){
  
   auto p1 = alloc(3);                        // (1)
   auto p1b = get_header(p1);
-  assert(p1b->size == sizeof(uintptr_t ));
+  assert(p1b->size == sizeof(intptr_t));
  
   // --------------------------------------
   // Test case 2: Exact amount of aligned bytes
