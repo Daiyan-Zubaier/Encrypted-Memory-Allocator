@@ -4,7 +4,7 @@
 #include <iostream>
 
 
-//intptr_t is our system architecture's word size
+//uintptr_t  is our system architecture's word size
 
 struct MemBlock{
     //Info about memory block
@@ -14,18 +14,20 @@ struct MemBlock{
     bool used; //Check if it is used
     MemBlock *next; 
 
-    //Payload Pointer
-    intptr_t data[1];
-    
+    union{
+      //Payload Pointer
+      uintptr_t data[1]; 
+
+      struct {
+        MemBlock *pred;
+        MemBlock *succ;
+      } freeBlock; //Instance of an unnamed struct
+    };
     //Could add a footer 
 
-    /*
-    How memory looks in allocation:
-    | Object Header | data[1] (1 byte) | User Data (variable size) | Buffer (for allignment) |
-    the slot for data[1] is occupied by the user data
-    */
 };
 
+//'Labelling' search modes
 enum class SearchMode {
   FirstFit,
   NextFit,
@@ -45,15 +47,15 @@ static MemBlock *last_block = heap_start;
 //Function Declarations
 void init(SearchMode mode);
 MemBlock *find_block(size_t size); 
-MemBlock *get_header(intptr_t *data);
-void free(intptr_t *data);
+MemBlock *get_header(uintptr_t  *data);
+void free(uintptr_t  *data);
 MemBlock *coalesce (MemBlock *block);
-MemBlock *get_header(intptr_t *data); 
+MemBlock *get_header(uintptr_t  *data); 
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
 void resetHeap();
-intptr_t *alloc(std::size_t size);
+uintptr_t  *alloc(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
@@ -68,8 +70,8 @@ void init(SearchMode mode) {
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
-  return (org_size + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
-    //return org_size + sizeof(intptr_t) - org_size % sizeof(intptr_t);
+  return (org_size + sizeof(uintptr_t ) - 1) & ~(sizeof(uintptr_t ) - 1);
+    //return org_size + sizeof(uintptr_t ) - org_size % sizeof(uintptr_t );
 }
 
 /*
@@ -77,14 +79,14 @@ Allocator
 */
 
 
-MemBlock *get_header(intptr_t *data) {
-  return (MemBlock *)((char *)data + sizeof(intptr_t) -
+MemBlock *get_header(uintptr_t  *data) {
+  return (MemBlock *)((char *)data + sizeof(uintptr_t ) -
                    sizeof(MemBlock));
 }
 
 inline size_t alloc_size(size_t size) {
   // Total size of memory block being requested minus the first slot size (data[1])
-  return size + sizeof(MemBlock) - sizeof(intptr_t);
+  return size + sizeof(MemBlock) - sizeof(uintptr_t );
 }
 
 
@@ -93,7 +95,7 @@ FREE
 ------------
 -> Writes to program that the memory block that stores the data is unused
 */
-void free(intptr_t *data){
+void free(uintptr_t  *data){
   MemBlock *block = get_header(data);
 
   if (block->next && !block->next->used){
@@ -217,11 +219,11 @@ void resetHeap() {
   last_block = nullptr;
 }
  
-/**
- * Initializes the heap, and the search mode.
- */
+/*
+Initializes the heap, and the search mode.
+*/
 
-intptr_t *alloc(std::size_t size){
+uintptr_t  *alloc(std::size_t size){
   size = allign(size);
 
   //Search for free block: 
@@ -303,7 +305,7 @@ int main(){
  
   auto p1 = alloc(3);                        // (1)
   auto p1b = get_header(p1);
-  assert(p1b->size == sizeof(intptr_t));
+  assert(p1b->size == sizeof(uintptr_t ));
  
   // --------------------------------------
   // Test case 2: Exact amount of aligned bytes
