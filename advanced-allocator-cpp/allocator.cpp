@@ -16,7 +16,7 @@ struct MemBlock{
 
     union{
       //Payload Pointer
-      intptr_tdata[1]; 
+      intptr_t data[1]; 
 
       struct {
         MemBlock *pred;
@@ -43,6 +43,7 @@ static MemBlock *free_list_head = nullptr;
 /*
 Previously found block. Updated in next_fit(). 
 */
+static MemBlock *last_block = heap_start; 
 
 //Function Declarations
 void init(SearchMode mode);
