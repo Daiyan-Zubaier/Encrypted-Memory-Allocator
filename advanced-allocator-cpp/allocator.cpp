@@ -243,8 +243,13 @@ MemBlock *segregated_fit(std::size_t size){
   MemBlock *og_heap_start = heap_start; 
   
   heap_start = segregated_starts[size_group];
+  
+  //Now the heap start is the heap start of a section of the segregated list
+  MemBlock *block = first_fit(size);
 
-
+  //Restoring status quo
+  heap_start = og_heap_start; 
+  return block;
 }
 /**
  * Reset the heap to the original position.
@@ -280,17 +285,30 @@ intptr_t *alloc(std::size_t size){
   block->size = size;
   block->used = true;
 
-  //If heap has nothing, initialize it with the ptr that points to the first memory block
-  if (heap_start == nullptr){
-    heap_start = block;
+  if (search_mode == SearchMode::SegregatedList){
+    std::size_t size_group = size / sizeof(intptr_t) - 1;
+
+    if (segregated_starts[size_group]){
+      segregated_starts[size_group] = block;
+    }
+    // Chain the blocks in the bucket.
+    if (segregated_ends[size_group] != nullptr) {
+      segregated_ends[size_group]->next = block;
+    }
+    segregated_ends[size_group] = block;
   }
+  else{
+    //If heap has nothing, initialize it with the ptr that points to the first memory block
+    if (heap_start == nullptr){
+      heap_start = block;
+    }
 
-  if (heap_end != nullptr){
-    heap_end->next = block;
+    if (heap_end != nullptr){
+      heap_end->next = block;
+    }
+
+    heap_end = block;
   }
-
-  heap_end = block;
-
   //Gives us the mem location of the first slot to start from
   return block->data; 
   
