@@ -30,31 +30,47 @@ enum class SearchMode {
   FirstFit,
   NextFit,
   BestFit,
-  FreeList
+  FreeList,
+  SegregatedList
 };
 
-static auto searchMode = SearchMode::FirstFit;
-//Start and end of the heap
-static MemBlock *heap_start = nullptr;
-static MemBlock *recent_block = heap_start;
-/*
-Previously found block. Updated in next_fit(). 
-*/
-static MemBlock *last_block = heap_start; 
-static std::list<MemBlock*> free_list;
+static auto search_mode = SearchMode::FirstFit;
+
+static MemBlock *heap_start = nullptr;      // Start of heap
+static MemBlock *heap_end = heap_start;     // End of heap 
+static MemBlock *last_block = heap_start;   // Last Successfully allocated block
+static std::list<MemBlock*> free_list;      // Tracks all free blocks
+
+//Segregrated lists data structures
+MemBlock *segregated_starts[] = {
+  nullptr,    // 8
+  nullptr,    // 16
+  nullptr,    // 32
+  nullptr,    // 64
+  nullptr,    // 128
+  nullptr,    // any > 128
+};
+MemBlock *segregated_ends[] = {
+  nullptr,    // 8
+  nullptr,    // 16
+  nullptr,    // 32
+  nullptr,    // 64
+  nullptr,    // 128
+  nullptr,    // any > 128
+};
 
 //Function Declarations
 void init(SearchMode mode);
+intptr_t *alloc(std::size_t size);
+void free(intptr_t *data);
+void resetHeap();
 MemBlock *find_block(size_t size); 
 MemBlock *get_header(intptr_t *data);
-void free(intptr_t *data);
 MemBlock *coalesce (MemBlock *block);
 MemBlock *get_header(intptr_t *data); 
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
-void resetHeap();
-intptr_t *alloc(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
@@ -62,7 +78,7 @@ int main();
 
 
 void init(SearchMode mode) {
-  searchMode = mode;
+  search_mode = mode;
   resetHeap();
 }
 
@@ -102,7 +118,7 @@ void free(intptr_t *data){
   }
   block->used = false;
 
-  if (searchMode == SearchMode::FreeList) {
+  if (search_mode == SearchMode::FreeList) {
     free_list.push_back(block);
   }
 }
@@ -125,7 +141,7 @@ Memory Algorithm Allocation Methods
 ------------------------------------
 */
 MemBlock *find_block(size_t size) {
-  switch (searchMode) {
+  switch (search_mode) {
     case SearchMode::FirstFit:
       return first_fit(size);
     case SearchMode::NextFit:
@@ -134,6 +150,8 @@ MemBlock *find_block(size_t size) {
       return best_fit(size);
     case SearchMode::FreeList:
       return exp_free_list(size);
+    case SearchMode::SegregatedList:
+      return seg_list(size);
   }
   return nullptr;
 }
@@ -204,7 +222,7 @@ MemBlock *best_fit(std::size_t size){
 Explicit Free List Algorithm
   Tracks all free blocks in a list, makes allocation FAST
 */
-MemBlock *exp_free_list(size_t size) {
+MemBlock *exp_free_list(std::size_t size) {
   for (const auto &block : free_list) {
     if (block->size < size) {
       continue;
@@ -215,7 +233,19 @@ MemBlock *exp_free_list(size_t size) {
   return nullptr;
 }
 
- 
+/*
+Segregated Lists:
+  Have predetermined sized lists, and allocate blocks, based on the list they best fit in
+*/
+
+MemBlock *segregated_fit(std::size_t size){
+  std::size_t size_group = size / sizeof(intptr_t) - 1;   // - 1 for 0-based indexing
+  MemBlock *og_heap_start = heap_start; 
+  
+  heap_start = segregated_starts[size_group];
+
+
+}
 /**
  * Reset the heap to the original position.
  */
@@ -228,7 +258,7 @@ void resetHeap() {
   brk(heap_start);
  
   heap_start = nullptr;
-  recent_block = nullptr;
+  heap_end = nullptr;
   last_block = nullptr;
 }
  
@@ -255,11 +285,11 @@ intptr_t *alloc(std::size_t size){
     heap_start = block;
   }
 
-  if (recent_block != nullptr){
-    recent_block->next = block;
+  if (heap_end != nullptr){
+    heap_end->next = block;
   }
 
-  recent_block = block;
+  heap_end = block;
 
   //Gives us the mem location of the first slot to start from
   return block->data; 
@@ -277,6 +307,7 @@ MemBlock *request_from_OS(size_t size) {
  
   return block;
 }
+
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
   std::size_t const hdr_size = sizeof(MemBlock);
