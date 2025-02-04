@@ -10,9 +10,7 @@ struct MemBlock{
     //Info about memory block
 
     //OBJECT HEADER
-    std::size_t size; //Check size of block
-    bool used; //Check if it is used
-    MemBlock *next; 
+    std::size_t header; //Check size of block
 
     //Payload Pointer
     intptr_t data[1];
@@ -25,6 +23,7 @@ struct MemBlock{
     the slot for data[1] is occupied by the user data
     */
 };
+
 
 enum class SearchMode {
   FirstFit,
@@ -80,6 +79,14 @@ int main();
 void init(SearchMode mode) {
   search_mode = mode;
   resetHeap();
+}
+
+inline bool is_used(MemBlock *block){
+  return block->header & 1; 
+}
+
+inline std::size_t(MemBlock *block){
+  return block->header & ~1L;
 }
 
 
