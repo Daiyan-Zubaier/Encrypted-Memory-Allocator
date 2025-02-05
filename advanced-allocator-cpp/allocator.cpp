@@ -121,7 +121,7 @@ FREE
 void free(intptr_t *data){
   MemBlock *block = get_header(data);
 
-  if (block->next && !block->next->used){
+  if (block->next && !is_used(block->next)){
     block = coalesce(block);
   }
   is_used(block) = false;
@@ -170,7 +170,7 @@ Go through memory, find me the FIRST piece of memory unallocated,
 */
 MemBlock *first_fit(std::size_t size){
   for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
-    if (!curr->used && curr->size >= size){
+    if (!is_used(curr) && get_size(curr) >= size){
       return curr;
     }
   }
@@ -190,7 +190,7 @@ MemBlock *next_fit(std::size_t size){
   }
 
   for(MemBlock *curr = last_block; curr != nullptr; curr = curr->next){
-    if(!curr->used && curr->size >= size){
+    if(!is_used(curr) && get_size(curr) >= size){
       last_block = curr;
       return curr;
     }
@@ -215,7 +215,7 @@ MemBlock *best_fit(std::size_t size){
   MemBlock *min_block {nullptr};
 
   for(MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
-    if(!curr->used && curr->size >= size){
+    if(!is_used(curr) && get_size(curr) >= size){
       if (size < min){
         min = size;
         min_block = curr;
