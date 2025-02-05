@@ -15,6 +15,7 @@ struct MemBlock{
     //Payload Pointer
     intptr_t data[1];
     
+    MemBlock *next;
     //Could add a footer 
 
     /*
@@ -85,10 +86,10 @@ inline bool is_used(MemBlock *block){
   return block->header & 1; 
 }
 
-inline std::size_t(MemBlock *block){
+inline std::size_t get_size(MemBlock *block){
+  //Does & with header and 11...1...10 
   return block->header & ~1L;
 }
-
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
@@ -123,7 +124,7 @@ void free(intptr_t *data){
   if (block->next && !block->next->used){
     block = coalesce(block);
   }
-  block->used = false;
+  is_used(block) = false;
 
   if (search_mode == SearchMode::FreeList) {
     free_list.push_back(block);
@@ -138,7 +139,7 @@ Coalescing, when freeing a block, check for adjacent free blocks
 This means, we won't have adjacent fragmented free blocks
 */
 MemBlock *coalesce (MemBlock *block){
-  block->size += block->next->size;
+  get_size(block) += block->next->size;
   block->next = block->next->next;
   return block;
 }
@@ -231,7 +232,7 @@ Explicit Free List Algorithm
 */
 MemBlock *exp_free_list(std::size_t size) {
   for (const auto &block : free_list) {
-    if (block->size < size) {
+    if (get_size(block) < size) {
       continue;
     }
     free_list.remove(block);
@@ -289,8 +290,8 @@ intptr_t *alloc(std::size_t size){
   //Expand heap, if there is no more space in heap
   MemBlock *block = request_from_OS(size);
 
-  block->size = size;
-  block->used = true;
+  get_size(block) = size;
+  is_used(block) = true;
 
   if (search_mode == SearchMode::SegregatedList){
     std::size_t size_group = size / sizeof(intptr_t) - 1;
@@ -336,7 +337,7 @@ MemBlock *request_from_OS(size_t size) {
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
   std::size_t const hdr_size = sizeof(MemBlock);
-  std::size_t rem_size = block->size - alloc_size(size) - hdr_size;
+  std::size_t rem_size = get_size(block) - alloc_size(size) - hdr_size;
 
   std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size + hdr_size};
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
@@ -347,8 +348,8 @@ MemBlock *split(MemBlock *block, std::size_t size){
   remain->next = block->next;
 
   //Updating the now occupied portion of the split
-  block->size = size; 
-  block->used = true;
+  get_size(block) = size; 
+  is_used(block) = true;
   block->next = remain;
   
   
@@ -358,10 +359,10 @@ MemBlock *split(MemBlock *block, std::size_t size){
 //Allocates with the assumption: there exists space in heap
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
   //If block can be split, i.e. is the block size bigger than object header + size
-  if (alloc_size(block->size) >= sizeof(MemBlock) + size){
+  if (alloc_size(get_size(block)) >= sizeof(MemBlock) + size){
     return split(block, size);
   }
-  block->used = true;
+  is_used(block) = true;
   return block;
 }
 
@@ -375,7 +376,7 @@ int main(){
  
   auto p1 = alloc(3);                        // (1)
   auto p1b = get_header(p1);
-  assert(p1b->size == sizeof(intptr_t));
+  assert(is_used(p1b) == sizeof(intptr_t));
  
   // --------------------------------------
   // Test case 2: Exact amount of aligned bytes
@@ -396,7 +397,7 @@ int main(){
   //
   
   free(p2);
-  assert(p2b->used == false);
+  assert(is_used(p2b) == false);
 
   // --------------------------------------
   // Test case 4: The block is reused
