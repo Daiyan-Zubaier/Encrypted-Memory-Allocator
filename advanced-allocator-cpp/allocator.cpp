@@ -342,7 +342,7 @@ MemBlock *split(MemBlock *block, std::size_t size){
   std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size + hdr_size};
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
 
-  //Updating the free portion of the split
+  //Updating the free portion of split
   remain->size = rem_size;
   remain->used = false;
   remain->next = block->next;
