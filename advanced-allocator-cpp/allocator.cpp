@@ -86,9 +86,17 @@ inline bool is_used(MemBlock *block){
   return block->header & 1; 
 }
 
+inline void set_used(MemBlock *block, const bool value){
+  block->header = (value == 0) ? (block->header & ~1UL) : (block->header | 1); 
+}
+
 inline std::size_t get_size(MemBlock *block){
   //Does & with header and 11...1...10 
   return block->header & ~1L;
+}
+
+inline void set_size (MemBlock *block){
+  
 }
 
 //Does memory allignment
@@ -124,7 +132,7 @@ void free(intptr_t *data){
   if (block->next && !is_used(block->next)){
     block = coalesce(block);
   }
-  is_used(block) = false;
+  set_used(block, false);
 
   if (search_mode == SearchMode::FreeList) {
     free_list.push_back(block);
@@ -344,12 +352,12 @@ MemBlock *split(MemBlock *block, std::size_t size){
 
   //Updating the free portion of split
   remain->size = rem_size;
-  remain->used = false;
+  set_used(remain, false);
   remain->next = block->next;
 
   //Updating the now occupied portion of the split
   get_size(block) = size; 
-  is_used(block) = true;
+  set_used(block, true);
   block->next = remain;
   
   
