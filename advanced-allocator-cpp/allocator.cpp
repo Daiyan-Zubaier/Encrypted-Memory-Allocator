@@ -91,7 +91,7 @@ inline void set_used(MemBlock *block, const bool value){
 }
 
 inline std::size_t get_size(MemBlock *block){
-  //Does & with header and 11...1...10 
+  //Does & with header and 11...1.1..10 
   return block->header & ~1L;
 }
 
