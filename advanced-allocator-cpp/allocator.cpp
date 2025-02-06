@@ -147,7 +147,7 @@ Coalescing, when freeing a block, check for adjacent free blocks
 This means, we won't have adjacent fragmented free blocks
 */
 MemBlock *coalesce (MemBlock *block){
-  get_size(block) += block->next->size;
+  set_size(block) += get_size(block->next);
   block->next = block->next->next;
   return block;
 }
