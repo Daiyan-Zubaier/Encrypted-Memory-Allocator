@@ -82,6 +82,7 @@ void init(SearchMode mode) {
   resetHeap();
 }
 
+//accessor methods
 inline bool is_used(MemBlock *block){
   return block->header & 1; 
 }
