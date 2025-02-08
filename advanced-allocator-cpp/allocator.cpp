@@ -16,6 +16,7 @@ struct MemBlock{
     intptr_t data[1];
     
     MemBlock *next;
+
     //Could add a footer 
 
     /*
@@ -24,7 +25,6 @@ struct MemBlock{
     the slot for data[1] is occupied by the user data
     */
 };
-
 
 enum class SearchMode {
   FirstFit,
@@ -96,8 +96,10 @@ inline std::size_t get_size(MemBlock *block){
   return block->header & ~1L;
 }
 
-inline void set_size (MemBlock *block){
-  
+inline void set_size(MemBlock *block, std::size_t value){
+  block->header &= 1L;
+  value &= ~1L;
+  block->header |= value;
 }
 
 //Does memory allignment
