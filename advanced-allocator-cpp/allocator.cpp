@@ -67,10 +67,11 @@ void resetHeap();
 MemBlock *find_block(size_t size); 
 MemBlock *get_header(intptr_t *data);
 MemBlock *coalesce (MemBlock *block);
-MemBlock *get_header(intptr_t *data); 
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
+MemBlock *exp_free_list(std::size_t size);
+MemBlock *seg_list(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
@@ -88,18 +89,16 @@ inline bool is_used(MemBlock *block){
 }
 
 inline void set_used(MemBlock *block, const bool value){
-  block->header = (value == 0) ? (block->header & ~1UL) : (block->header | 1); 
+  block->header = (value == 0) ? (block->header & ~1UL) : (block->header | 1UL); 
 }
 
 inline std::size_t get_size(MemBlock *block){
   //Does & with header and 11...1.1..10 
-  return block->header & ~1L;
+  return block->header & ~1UL;
 }
 
 inline void set_size(MemBlock *block, std::size_t value){
-  block->header &= 1L;
-  value &= ~1L;
-  block->header |= value;
+  block->header = (block->header & 1UL) | (value & ~1UL);
 }
 
 //Does memory allignment
@@ -114,8 +113,7 @@ Allocator
 
 
 MemBlock *get_header(intptr_t *data) {
-  return (MemBlock *)((char *)data + sizeof(intptr_t) -
-                   sizeof(MemBlock));
+  return (MemBlock *)((char *)data - sizeof(std::size_t));
 }
 
 inline size_t alloc_size(size_t size) {
@@ -150,7 +148,8 @@ Coalescing, when freeing a block, check for adjacent free blocks
 This means, we won't have adjacent fragmented free blocks
 */
 MemBlock *coalesce (MemBlock *block){
-  set_size(block) += get_size(block->next);
+  std::size_t new_size = get_size(block) + get_size(block->next);
+  set_size(block, new_size);
   block->next = block->next->next;
   return block;
 }
@@ -257,7 +256,7 @@ Segregated Lists:
   Have predetermined sized lists, and allocate blocks, based on the list they best fit in
 */
 
-MemBlock *segregated_fit(std::size_t size){
+MemBlock *seg_list(std::size_t size){
   std::size_t size_group = size / sizeof(intptr_t) - 1;   // - 1 for 0-based indexing
   MemBlock *og_heap_start = heap_start; 
   
@@ -301,8 +300,8 @@ intptr_t *alloc(std::size_t size){
   //Expand heap, if there is no more space in heap
   MemBlock *block = request_from_OS(size);
 
-  get_size(block) = size;
-  is_used(block) = true;
+  set_size(block, size);
+  set_used(block, true);
 
   if (search_mode == SearchMode::SegregatedList){
     std::size_t size_group = size / sizeof(intptr_t) - 1;
@@ -354,12 +353,12 @@ MemBlock *split(MemBlock *block, std::size_t size){
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
 
   //Updating the free portion of split
-  remain->size = rem_size;
+  set_size(remain, rem_size);
   set_used(remain, false);
   remain->next = block->next;
 
   //Updating the now occupied portion of the split
-  get_size(block) = size; 
+  set_size(block, size); 
   set_used(block, true);
   block->next = remain;
   
@@ -373,7 +372,7 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
   if (alloc_size(get_size(block)) >= sizeof(MemBlock) + size){
     return split(block, size);
   }
-  is_used(block) = true;
+  set_used(block, true);
   return block;
 }
 
@@ -387,7 +386,7 @@ int main(){
  
   auto p1 = alloc(3);                        // (1)
   auto p1b = get_header(p1);
-  assert(is_used(p1b) == sizeof(intptr_t));
+  assert(get_size(p1b) >= sizeof(intptr_t));
  
   // --------------------------------------
   // Test case 2: Exact amount of aligned bytes
@@ -395,7 +394,7 @@ int main(){
  
   auto p2 = alloc(8);                        // (2)
   auto p2b = get_header(p2);
-  assert(p2b->size == 8);
+  assert(get_size(p2b) == 8);
  
  
   puts("\nAll assertions passed!\n");
@@ -419,7 +418,7 @@ int main(){
   
   auto p3 = alloc(8);
   auto p3b = get_header(p3);
-  assert(p3b->size == 8);
+  assert(get_size(p3b) == 8);
   assert(p3b == p2b);  // Reused!
 
   // Init the heap, and the searching algorithm.
