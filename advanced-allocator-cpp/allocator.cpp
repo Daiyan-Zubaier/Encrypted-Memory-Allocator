@@ -36,10 +36,12 @@ enum class SearchMode {
 
 static auto search_mode = SearchMode::FirstFit;
 
+#define XOR_KEY 0xAA                        // Used for encrypting data
 static MemBlock *heap_start = nullptr;      // Start of heap
 static MemBlock *heap_end = heap_start;     // End of heap 
 static MemBlock *last_block = heap_start;   // Last Successfully allocated block
 static std::list<MemBlock*> free_list;      // Tracks all free blocks
+
 
 //Segregrated lists data structures
 MemBlock *segregated_starts[] = {
@@ -75,6 +77,8 @@ MemBlock *seg_list(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
+void xor_encrypt_decrypt(intptr_t *data, size_t size);
+//void print_blocks();
 int main();
 
 
@@ -129,6 +133,7 @@ FREE
 */
 void free(intptr_t *data){
   MemBlock *block = get_header(data);
+  xor_encrypt_decrypt(block->data, get_size(block)); 
 
   if (block->next && !is_used(block->next)){
     block = coalesce(block);
@@ -285,6 +290,19 @@ void resetHeap() {
   last_block = nullptr;
 }
  
+// void xor_encrypt_decrypt(intptr_t *data, size_t size) {
+//   for (size_t i = 0; i < size; i++) {
+//       data[i] ^= XOR_KEY;
+//   }
+// }
+void xor_encrypt_decrypt(intptr_t *data, size_t size) {
+  // Calculate the number of intptr_t elements
+  size_t count = size / sizeof(intptr_t);
+  for (size_t i = 0; i < count; i++) {
+      data[i] ^= XOR_KEY;
+  }
+}
+
 /**
  * Initializes the heap, and the search mode.
  */
@@ -294,6 +312,7 @@ intptr_t *alloc(std::size_t size){
 
   //Search for free block: 
   if (MemBlock *block = find_block(size)){
+    xor_encrypt_decrypt(block->data, size); 
     return block->data;
   }
 
@@ -327,6 +346,9 @@ intptr_t *alloc(std::size_t size){
 
     heap_end = block;
   }
+
+  xor_encrypt_decrypt(block->data, size); 
+
   //Gives us the mem location of the first slot to start from
   return block->data; 
   
@@ -340,7 +362,7 @@ MemBlock *request_from_OS(size_t size) {
   if (sbrk(alloc_size(size)) == (void *)-1) {   
     return nullptr;
   }
- 
+  block->next = nullptr;
   return block;
 }
 
@@ -366,6 +388,7 @@ MemBlock *split(MemBlock *block, std::size_t size){
   return block; 
 }
 
+
 //Allocates with the assumption: there exists space in heap
 MemBlock *list_allocate(MemBlock *block, std::size_t size){
   //If block can be split, i.e. is the block size bigger than object header + size
@@ -376,38 +399,52 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
   return block;
 }
 
+// void print_blocks() {
+//   traverse([](MemBlock *block) {
+//     std::cout << "[" << get_size(block) << ", " << is_used(block) << "] ";
+//   });
+//   std::cout << "\n";
+// }
+
 int main(){
+  std::cout << "=======================================================\n";
+  std::cout << "# First-fit search\n\n";
+
+  init(SearchMode::FirstFit);
+
   // --------------------------------------
-  // -------------------------------------
   // Test case 1: Alignment
   //
   // A request for 3 bytes is aligned to 8.
   //
- 
-  auto p1 = alloc(3);                        // (1)
+
+  auto p1 = alloc(3);
   auto p1b = get_header(p1);
-  assert(get_size(p1b) >= sizeof(intptr_t));
- 
+  assert(get_size(p1b) == sizeof(intptr_t));
+
+  //// print_blocks()();
+
   // --------------------------------------
   // Test case 2: Exact amount of aligned bytes
   //
- 
-  auto p2 = alloc(8);                        // (2)
+
+  auto p2 = alloc(8);
   auto p2b = get_header(p2);
   assert(get_size(p2b) == 8);
- 
- 
-  puts("\nAll assertions passed!\n");
-  
-    // Init the heap, and the searching algorithm.
-  init(SearchMode::NextFit);
-  
+
+ // // print_blocks()();
+
   // --------------------------------------
   // Test case 3: Free the object
   //
-  
+  // The pointer to the reclaimed block is added
+  // to the free list.
+  //
+
   free(p2);
   assert(is_used(p2b) == false);
+
+ // // print_blocks()();
 
   // --------------------------------------
   // Test case 4: The block is reused
@@ -415,72 +452,201 @@ int main(){
   // A consequent allocation of the same size reuses
   // the previously freed block.
   //
-  
+
   auto p3 = alloc(8);
   auto p3b = get_header(p3);
   assert(get_size(p3b) == 8);
   assert(p3b == p2b);  // Reused!
 
-  // Init the heap, and the searching algorithm.
+//  // print_blocks()();
+
+  auto p4 = alloc(8);
+  auto p4b = get_header(p4);
+  assert(get_size(p4b) == 8);
+
+//  // print_blocks()();
+
+  auto p5 = alloc(8);
+  assert(get_size(get_header(p5)) == 8);
+
+//  // print_blocks()();
+
+  free(p5);
+
+//  // print_blocks()();
+
+  // This free coalesces with p5 block.
+  free(p4);
+
+  // Only one free block with size 16.
+  assert(get_size(get_header(p4)) == 16);
+
+//  // print_blocks()();
+
+  auto p6 = alloc(16);
+  auto p6b = get_header(p6);
+  assert(p6b == p4b);  // Reused!
+  assert(get_size(p6b) == 16);
+
+//  // print_blocks()();
+
+  auto p7 = alloc(128);
+  auto p7b = get_header(p7);
+  assert(get_size(p7b)== 128);
+
+//  // print_blocks()();
+
+  free(p7);
+
+//  // print_blocks()();
+
+  auto p8 = alloc(8);
+  auto p8b = get_header(p8);
+  assert(p8b == p7b);
+  assert(get_size(p8b) == 8);
+
+//  // print_blocks()();
+
+  // ===========================================================================
+  // Next-fit search
+
+  std::cout << "\n=======================================================\n";
+  std::cout << "# Next-fit search\n\n";
+
   init(SearchMode::NextFit);
-  
+
   // --------------------------------------
   // Test case 5: Next search start position
   //
-  
+
   // [[8, 1], [8, 1], [8, 1]]
   alloc(8);
   alloc(8);
   alloc(8);
-  
+  // print_blocks()();
+
   // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
   auto o1 = alloc(16);
   auto o2 = alloc(16);
-  
+  // print_blocks()();
+
   // [[8, 1], [8, 1], [8, 1], [16, 0], [16, 0]]
   free(o1);
   free(o2);
-  
+  // print_blocks()();
+
   // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 0]]
   auto o3 = alloc(16);
-  
+  // print_blocks()();
+
   // Start position from o3:
-  assert(last_block == get_header(o3));
-  
+  assert(heap_end == get_header(o3));
+
   // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
   //                           ^ start here
-  //alloc(16);
-  
+  alloc(16);
+  // print_blocks()();
+
+  // ===========================================================================
+  // Best-fit search
+
+  std::cout << "\n=======================================================\n";
+  std::cout << "# Best-fit search\n\n";
+
   init(SearchMode::BestFit);
- 
+
   // --------------------------------------
   // Test case 6: Best-fit search
   //
-  
+
   // [[8, 1], [64, 1], [8, 1], [16, 1]]
   alloc(8);
   auto z1 = alloc(64);
   alloc(8);
   auto z2 = alloc(16);
-  
+  // print_blocks()();
+
   // Free the last 16
   free(z2);
-  
+
   // Free 64:
   free(z1);
-  
+
   // [[8, 1], [64, 0], [8, 1], [16, 0]]
-  
+  // print_blocks()();
+
   // Reuse the last 16 block:
   auto z3 = alloc(16);
   assert(get_header(z3) == get_header(z2));
-  
+
   // [[8, 1], [64, 0], [8, 1], [16, 1]]
-  
+  // print_blocks()();
+
   // Reuse 64, splitting it to 16, and 24 (considering header)
   z3 = alloc(16);
   assert(get_header(z3) == get_header(z1));
-  
-  free(z3);
+
   // [[8, 1], [16, 1], [24, 0], [8, 1], [16, 1]]
+  // print_blocks()();
+
+  // ===========================================================================
+  // Free-list search
+
+  std::cout << "\n=======================================================\n";
+  std::cout << "# Free-list search\n\n";
+
+  init(SearchMode::FreeList);
+
+  alloc(8);
+  alloc(8);
+  auto v1 = alloc(16);
+  alloc(8);
+  // print_blocks()();
+
+  free(v1);
+  assert(free_list.size() == 1);
+  // print_blocks()();
+
+  auto v2 = alloc(16);
+  assert(free_list.size() == 0);
+  assert(get_header(v1) == get_header(v2));
+  // print_blocks()();
+
+  // ===========================================================================
+  // Segregated-fit search
+
+  std::cout << "\n=======================================================\n";
+  std::cout << "# Segregated-list search\n\n";
+
+  init(SearchMode::SegregatedList);
+
+  auto s1 = alloc(3);
+  auto s2 = alloc(8);
+
+  assert(get_header(s1) == segregated_starts[0]);
+  assert(get_header(s2) == segregated_starts[0]->next);
+
+  // print_blocks()();
+
+  auto s3 = alloc(16);
+  assert(get_header(s3) == segregated_starts[1]);
+  // print_blocks()();
+
+  auto s4 = alloc(8);
+  assert(get_header(s4) == segregated_starts[0]->next->next);
+  // print_blocks()();
+
+  auto s5 = alloc(32);
+  assert(get_header(s5) == segregated_starts[3]);
+  // print_blocks()();
+
+  free(s1);
+  free(s2);
+  free(s3);
+
+  // print_blocks()();
+
+  puts("\nAll assertions passed!\n");
+
+  return 0;
 }
