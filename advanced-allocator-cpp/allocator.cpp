@@ -4,7 +4,7 @@
 #include <iostream>
 
 
-//intptr_t is our system architecture's word size
+//uintptr_t is our system architecture's word size
 
 struct MemBlock{
     //Info about memory block
@@ -13,7 +13,7 @@ struct MemBlock{
     std::size_t header; //Check size of block
 
     //Payload Pointer
-    intptr_t data[1];
+    uintptr_t data[1];
     
     MemBlock *next;
 
@@ -63,11 +63,11 @@ MemBlock *segregated_ends[] = {
 
 //Function Declarations
 void init(SearchMode mode);
-intptr_t *alloc(std::size_t size);
-void free(intptr_t *data);
+uintptr_t *alloc(std::size_t size);
+void free(uintptr_t *data);
 void resetHeap();
 MemBlock *find_block(size_t size); 
-MemBlock *get_header(intptr_t *data);
+MemBlock *get_header(uintptr_t *data);
 MemBlock *coalesce (MemBlock *block);
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
@@ -77,7 +77,7 @@ MemBlock *seg_list(std::size_t size);
 MemBlock *request_from_OS(size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
-void xor_encrypt_decrypt(intptr_t *data, size_t size);
+void xor_encrypt_decrypt(uintptr_t *data, size_t size);
 //void print_blocks();
 int main();
 
@@ -107,8 +107,8 @@ inline void set_size(MemBlock *block, std::size_t value){
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
-  return (org_size + sizeof(intptr_t) - 1) & ~(sizeof(intptr_t) - 1);
-    //return org_size + sizeof(intptr_t) - org_size % sizeof(intptr_t);
+  return (org_size + sizeof(uintptr_t) - 1) & ~(sizeof(uintptr_t) - 1);
+    //return org_size + sizeof(uintptr_t) - org_size % sizeof(uintptr_t);
 }
 
 /*
@@ -116,13 +116,13 @@ Allocator
 */
 
 
-MemBlock *get_header(intptr_t *data) {
+MemBlock *get_header(uintptr_t *data) {
   return (MemBlock *)((char *)data - sizeof(std::size_t));
 }
 
 inline size_t alloc_size(size_t size) {
   // Total size of memory block being requested minus the first slot size (data[1])
-  return size + sizeof(MemBlock) - sizeof(intptr_t);
+  return size + sizeof(MemBlock) - sizeof(uintptr_t);
 }
 
 
@@ -131,17 +131,51 @@ FREE
 ------------
 -> Writes to program that the memory block that stores the data is unused
 */
-void free(intptr_t *data){
+// void free(uintptr_t *data){
+//   MemBlock *block = get_header(data);
+//   xor_encrypt_decrypt(block->data, get_size(block)); 
+ 
+//   if (searchMode != SearchMode::SegregatedList && block->next && !is_used(block->next)){
+//     std::cout << "Im in" << std::endl;
+//     block = coalesce(block);
+//   }
+//   set_used(block, false);
+
+//   if (search_mode == SearchMode::FreeList) {
+//     free_list.push_back(block);
+//   }
+// }
+void free(uintptr_t *data) {
   MemBlock *block = get_header(data);
+  std::cout << "[free] Block at: " << block 
+            << " | Size: " << get_size(block) 
+            << " | Used: " << is_used(block) 
+            << " | Next: " << block->next << std::endl;
+
+  if (block->next) {
+      std::cout << "[free] Next Block at: " << block->next 
+                << " | Size: " << get_size(block->next) 
+                << " | Used: " << is_used(block->next) << std::endl;
+  } else {
+      std::cout << "[free] No next block (block->next is nullptr)." << std::endl;
+  }
+
   xor_encrypt_decrypt(block->data, get_size(block)); 
 
-  if (block->next && !is_used(block->next)){
-    block = coalesce(block);
+  if (block->next && !is_used(block->next)) {
+      std::cout << "Im in (Coalescing with next block!)" << std::endl;
+      block = coalesce(block);
+  } else {
+      std::cout << "[free] Not coalescing: ";
+      if (!block->next) std::cout << "block->next is null.";
+      else if (is_used(block->next)) std::cout << "Next block is marked as used.";
+      std::cout << std::endl;
   }
+
   set_used(block, false);
 
   if (search_mode == SearchMode::FreeList) {
-    free_list.push_back(block);
+      free_list.push_back(block);
   }
 }
 
@@ -152,10 +186,17 @@ Coalescing, when freeing a block, check for adjacent free blocks
 
 This means, we won't have adjacent fragmented free blocks
 */
-MemBlock *coalesce (MemBlock *block){
-  std::size_t new_size = get_size(block) + get_size(block->next);
-  set_size(block, new_size);
-  block->next = block->next->next;
+MemBlock *coalesce(MemBlock *block){
+  if (!is_used(block->next)){
+    if (block->next == heap_end){
+      heap_end = block;
+    }
+    std::size_t new_size = get_size(block) + get_size(block->next);
+    std::cout << "New size: " << new_size << std::endl;
+    set_size(block, new_size);
+    block->next = block->next->next;
+  }
+  
   return block;
 }
 
@@ -186,7 +227,7 @@ Go through memory, find me the FIRST piece of memory unallocated,
 MemBlock *first_fit(std::size_t size){
   for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
     if (!is_used(curr) && get_size(curr) >= size){
-      return curr;
+      return list_allocate(curr, size);
     }
   }
 
@@ -207,7 +248,7 @@ MemBlock *next_fit(std::size_t size){
   for(MemBlock *curr = last_block; curr != nullptr; curr = curr->next){
     if(!is_used(curr) && get_size(curr) >= size){
       last_block = curr;
-      return curr;
+      return list_allocate(curr, size);
     }
 
     //Circled back
@@ -238,7 +279,7 @@ MemBlock *best_fit(std::size_t size){
     }
   }
 
-  return min_block;
+  return list_allocate(min_bloc)k;
 }
 
 /*
@@ -262,7 +303,7 @@ Segregated Lists:
 */
 
 MemBlock *seg_list(std::size_t size){
-  std::size_t size_group = size / sizeof(intptr_t) - 1;   // - 1 for 0-based indexing
+  std::size_t size_group = size / sizeof(uintptr_t) - 1;   // - 1 for 0-based indexing
   MemBlock *og_heap_start = heap_start; 
   
   heap_start = segregated_starts[size_group];
@@ -290,14 +331,14 @@ void resetHeap() {
   last_block = nullptr;
 }
  
-// void xor_encrypt_decrypt(intptr_t *data, size_t size) {
+// void xor_encrypt_decrypt(uintptr_t *data, size_t size) {
 //   for (size_t i = 0; i < size; i++) {
 //       data[i] ^= XOR_KEY;
 //   }
 // }
-void xor_encrypt_decrypt(intptr_t *data, size_t size) {
-  // Calculate the number of intptr_t elements
-  size_t count = size / sizeof(intptr_t);
+void xor_encrypt_decrypt(uintptr_t *data, size_t size) {
+  // Calculate the number of uintptr_t elements
+  size_t count = size / sizeof(uintptr_t);
   for (size_t i = 0; i < count; i++) {
       data[i] ^= XOR_KEY;
   }
@@ -307,7 +348,7 @@ void xor_encrypt_decrypt(intptr_t *data, size_t size) {
  * Initializes the heap, and the search mode.
  */
 
-intptr_t *alloc(std::size_t size){
+uintptr_t *alloc(std::size_t size){
   size = allign(size);
 
   //Search for free block: 
@@ -323,7 +364,7 @@ intptr_t *alloc(std::size_t size){
   set_used(block, true);
 
   if (search_mode == SearchMode::SegregatedList){
-    std::size_t size_group = size / sizeof(intptr_t) - 1;
+    std::size_t size_group = size / sizeof(uintptr_t) - 1;
 
     if (segregated_starts[size_group]){
       segregated_starts[size_group] = block;
@@ -399,18 +440,23 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
   return block;
 }
 
-// void print_blocks() {
-//   traverse([](MemBlock *block) {
-//     std::cout << "[" << get_size(block) << ", " << is_used(block) << "] ";
-//   });
-//   std::cout << "\n";
-// }
+void print_heap() {
+  std::cout << "\n----- Heap Dump -----\n";
+  for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next) {
+      std::cout << "Block at " << curr
+                << " | Size: " << get_size(curr)
+                << " | Used: " << (is_used(curr) ? "Yes" : "No")
+                << " | Next: " << curr->next
+                << std::endl;
+  }
+  std::cout << "---------------------\n";
+}
+
 
 int main(){
   std::cout << "=======================================================\n";
   std::cout << "# First-fit search\n\n";
-
-  init(SearchMode::FirstFit);
+  
 
   // --------------------------------------
   // Test case 1: Alignment
@@ -420,7 +466,8 @@ int main(){
 
   auto p1 = alloc(3);
   auto p1b = get_header(p1);
-  assert(get_size(p1b) == sizeof(intptr_t));
+  assert(get_size(p1b) == sizeof(uintptr_t));
+  free(p1);
 
   //// print_blocks()();
 
@@ -431,6 +478,7 @@ int main(){
   auto p2 = alloc(8);
   auto p2b = get_header(p2);
   assert(get_size(p2b) == 8);
+  
 
  // // print_blocks()();
 
@@ -457,28 +505,25 @@ int main(){
   auto p3b = get_header(p3);
   assert(get_size(p3b) == 8);
   assert(p3b == p2b);  // Reused!
+  free(p3);
 
 //  // print_blocks()();
 
   auto p4 = alloc(8);
   auto p4b = get_header(p4);
   assert(get_size(p4b) == 8);
-
-//  // print_blocks()();
+  std::cout << "THE ADDRESS OF p4 is: " << p4 << std::endl;
 
   auto p5 = alloc(8);
   assert(get_size(get_header(p5)) == 8);
+  
 
-//  // print_blocks()();
-
+  std::cout << "THE ADDRESS OF p5 is: " << p5 << std::endl;print_heap();
   free(p5);
-
-//  // print_blocks()();
-
-  // This free coalesces with p5 block.
   free(p4);
-
+  print_heap();
   // Only one free block with size 16.
+  std::cout << get_size(get_header(p4)) << std::endl;
   assert(get_size(get_header(p4)) == 16);
 
 //  // print_blocks()();
@@ -506,7 +551,7 @@ int main(){
   assert(get_size(p8b) == 8);
 
 //  // print_blocks()();
-
+/*
   // ===========================================================================
   // Next-fit search
 
@@ -647,6 +692,6 @@ int main(){
   // print_blocks()();
 
   puts("\nAll assertions passed!\n");
-
+*/
   return 0;
 }
