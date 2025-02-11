@@ -11,11 +11,11 @@ struct MemBlock{
 
     //OBJECT HEADER
     std::size_t header; //Check size of block
-
+    MemBlock *next;
     //Payload Pointer
     uintptr_t data[1];
     
-    MemBlock *next;
+    
 
     //Could add a footer 
 
@@ -66,7 +66,7 @@ void init(SearchMode mode);
 uintptr_t *alloc(std::size_t size);
 void free(uintptr_t *data);
 void resetHeap();
-MemBlock *find_block(size_t size); 
+MemBlock *find_block(std::size_t size); 
 MemBlock *get_header(uintptr_t *data);
 MemBlock *coalesce (MemBlock *block);
 MemBlock *first_fit(std::size_t size); 
@@ -74,10 +74,10 @@ MemBlock *next_fit(std::size_t size);
 MemBlock *best_fit(std::size_t size);
 MemBlock *exp_free_list(std::size_t size);
 MemBlock *seg_list(std::size_t size);
-MemBlock *request_from_OS(size_t size);
+MemBlock *request_from_OS(std::size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
-void xor_encrypt_decrypt(uintptr_t *data, size_t size);
+void xor_encrypt_decrypt(uintptr_t *data, std::size_t size);
 //void print_blocks();
 int main();
 
@@ -117,10 +117,10 @@ Allocator
 
 
 MemBlock *get_header(uintptr_t *data) {
-  return (MemBlock *)((char *)data - sizeof(std::size_t));
+  return (MemBlock *)((char *)data + sizeof(intptr_t) - sizeof(MemBlock));
 }
 
-inline size_t alloc_size(size_t size) {
+inline std::size_t alloc_size(size_t size) {
   // Total size of memory block being requested minus the first slot size (data[1])
   return size + sizeof(MemBlock) - sizeof(uintptr_t);
 }
@@ -192,7 +192,6 @@ MemBlock *coalesce(MemBlock *block){
       heap_end = block;
     }
     std::size_t new_size = get_size(block) + get_size(block->next);
-    std::cout << "New size: " << new_size << std::endl;
     set_size(block, new_size);
     block->next = block->next->next;
   }
@@ -204,7 +203,7 @@ MemBlock *coalesce(MemBlock *block){
 Memory Algorithm Allocation Methods
 ------------------------------------
 */
-MemBlock *find_block(size_t size) {
+MemBlock *find_block(std::size_t size) {
   switch (search_mode) {
     case SearchMode::FirstFit:
       return first_fit(size);
@@ -226,7 +225,10 @@ Go through memory, find me the FIRST piece of memory unallocated,
 */
 MemBlock *first_fit(std::size_t size){
   for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
+    //xor_encrypt_decrypt(curr->data, get_size(curr));
+    
     if (!is_used(curr) && get_size(curr) >= size){
+      
       return list_allocate(curr, size);
     }
   }
@@ -279,7 +281,7 @@ MemBlock *best_fit(std::size_t size){
     }
   }
 
-  return list_allocate(min_bloc)k;
+  return list_allocate(min_block, size);
 }
 
 /*
@@ -331,14 +333,14 @@ void resetHeap() {
   last_block = nullptr;
 }
  
-// void xor_encrypt_decrypt(uintptr_t *data, size_t size) {
+// void xor_encrypt_decrypt(uintptr_t *data, std::size_t size) {
 //   for (size_t i = 0; i < size; i++) {
 //       data[i] ^= XOR_KEY;
 //   }
 // }
-void xor_encrypt_decrypt(uintptr_t *data, size_t size) {
+void xor_encrypt_decrypt(uintptr_t *data, std::size_t size) {
   // Calculate the number of uintptr_t elements
-  size_t count = size / sizeof(uintptr_t);
+  std::size_t count = size / sizeof(uintptr_t);
   for (size_t i = 0; i < count; i++) {
       data[i] ^= XOR_KEY;
   }
@@ -349,21 +351,25 @@ void xor_encrypt_decrypt(uintptr_t *data, size_t size) {
  */
 
 uintptr_t *alloc(std::size_t size){
+  std::cout << "\n\nTHe size is: " << size << std::endl;
   size = allign(size);
-
+  
   //Search for free block: 
+  
   if (MemBlock *block = find_block(size)){
-    xor_encrypt_decrypt(block->data, size); 
+    xor_encrypt_decrypt(block->data, size);     
     return block->data;
   }
-
+  
   //Expand heap, if there is no more space in heap
+  
   MemBlock *block = request_from_OS(size);
 
   set_size(block, size);
   set_used(block, true);
 
   if (search_mode == SearchMode::SegregatedList){
+    
     std::size_t size_group = size / sizeof(uintptr_t) - 1;
 
     if (segregated_starts[size_group]){
@@ -409,10 +415,11 @@ MemBlock *request_from_OS(size_t size) {
 
 //Splits memory block
 MemBlock *split(MemBlock *block, std::size_t size){
-  std::size_t const hdr_size = sizeof(MemBlock);
-  std::size_t rem_size = get_size(block) - alloc_size(size) - hdr_size;
+  
+  std::size_t rem_size{get_size(block) - alloc_size(size)};
 
-  std::byte *ptr{reinterpret_cast<std::byte*>(block->next) + rem_size + hdr_size};
+  //Gives you address to split point
+  std::byte *ptr{reinterpret_cast<std::byte*>(block) + alloc_size(size)};
   MemBlock *remain = reinterpret_cast<MemBlock*>(ptr);
 
   //Updating the free portion of split
@@ -424,8 +431,7 @@ MemBlock *split(MemBlock *block, std::size_t size){
   set_size(block, size); 
   set_used(block, true);
   block->next = remain;
-  
-  
+
   return block; 
 }
 
@@ -436,10 +442,14 @@ MemBlock *list_allocate(MemBlock *block, std::size_t size){
   if (alloc_size(get_size(block)) >= sizeof(MemBlock) + size){
     return split(block, size);
   }
+  
   set_used(block, true);
+  set_size(block, size);
+  
   return block;
 }
 
+//To visualize heap
 void print_heap() {
   std::cout << "\n----- Heap Dump -----\n";
   for (MemBlock *curr = heap_start; curr != nullptr; curr = curr->next) {
@@ -452,7 +462,7 @@ void print_heap() {
   std::cout << "---------------------\n";
 }
 
-
+//Test cases move to test.cpp later
 int main(){
   std::cout << "=======================================================\n";
   std::cout << "# First-fit search\n\n";
@@ -466,6 +476,7 @@ int main(){
 
   auto p1 = alloc(3);
   auto p1b = get_header(p1);
+
   assert(get_size(p1b) == sizeof(uintptr_t));
   free(p1);
 
@@ -507,48 +518,47 @@ int main(){
   assert(p3b == p2b);  // Reused!
   free(p3);
 
-//  // print_blocks()();
 
   auto p4 = alloc(8);
   auto p4b = get_header(p4);
   assert(get_size(p4b) == 8);
-  std::cout << "THE ADDRESS OF p4 is: " << p4 << std::endl;
 
   auto p5 = alloc(8);
   assert(get_size(get_header(p5)) == 8);
   
 
-  std::cout << "THE ADDRESS OF p5 is: " << p5 << std::endl;print_heap();
   free(p5);
   free(p4);
-  print_heap();
   // Only one free block with size 16.
-  std::cout << get_size(get_header(p4)) << std::endl;
   assert(get_size(get_header(p4)) == 16);
-
-//  // print_blocks()();
-
+  
+  print_heap();
   auto p6 = alloc(16);
   auto p6b = get_header(p6);
   assert(p6b == p4b);  // Reused!
   assert(get_size(p6b) == 16);
+  
 
-//  // print_blocks()();
-
+  print_heap();
   auto p7 = alloc(128);
+  
   auto p7b = get_header(p7);
   assert(get_size(p7b)== 128);
-
+  
 //  // print_blocks()();
 
   free(p7);
 
 //  // print_blocks()();
-
+  
+std::cout << "\nSeg fault here? " << std::endl;
+  print_heap();
   auto p8 = alloc(8);
   auto p8b = get_header(p8);
   assert(p8b == p7b);
   assert(get_size(p8b) == 8);
+
+  std::cout << "ALL FIRST FIT TEST CASES PASSED" << std::endl;
 
 //  // print_blocks()();
 /*
