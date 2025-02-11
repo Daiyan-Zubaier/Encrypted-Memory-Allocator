@@ -242,30 +242,36 @@ Same as first algo, but remember where we ended our previous allocation
 */
 
 
-MemBlock *next_fit(std::size_t size){
-  if (last_block == nullptr){
+MemBlock *next_fit(std::size_t size) {
+  if (last_block == nullptr) {
     last_block = heap_start;
   }
 
-  for(MemBlock *curr = last_block; curr != nullptr; curr = curr->next){
-    if(!is_used(curr) && get_size(curr) >= size){
-      last_block = curr;
-      return list_allocate(curr, size);
+  MemBlock *start = last_block;
+  MemBlock *block = start;
+
+  while (block != nullptr) {
+    // Valid block check
+    if (is_used(block) && get_size(block) >= size) {
+      last_block = block;
+      return list_allocate(block, size);
     }
 
-    //Circled back
-    if (curr->next == last_block) {
+    block = block->next;
+    // End of linked list, circle back
+    if (block == nullptr) {
+      block = heap_start;
+    }
+
+    // Circled back w/o finding valid block
+    if (block == start) {
       break;
     }
-    
-    //Let's get it started again
-     if (curr->next == nullptr) {
-      curr = heap_start; 
-    }
   }
-  return nullptr;
 
+  return nullptr;
 }
+
 
 
 MemBlock *best_fit(std::size_t size){
@@ -351,7 +357,6 @@ void xor_encrypt_decrypt(uintptr_t *data, std::size_t size) {
  */
 
 uintptr_t *alloc(std::size_t size){
-  std::cout << "\n\nTHe size is: " << size << std::endl;
   size = allign(size);
   
   //Search for free block: 
@@ -551,7 +556,6 @@ int main(){
 
 //  // print_blocks()();
   
-std::cout << "\nSeg fault here? " << std::endl;
   print_heap();
   auto p8 = alloc(8);
   auto p8b = get_header(p8);
@@ -560,8 +564,10 @@ std::cout << "\nSeg fault here? " << std::endl;
 
   std::cout << "ALL FIRST FIT TEST CASES PASSED" << std::endl;
 
-//  // print_blocks()();
-/*
+  print_heap();
+
+
+
   // ===========================================================================
   // Next-fit search
 
@@ -578,7 +584,7 @@ std::cout << "\nSeg fault here? " << std::endl;
   alloc(8);
   alloc(8);
   alloc(8);
-  // print_blocks()();
+  print_heap();
 
   // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
   auto o1 = alloc(16);
@@ -601,7 +607,7 @@ std::cout << "\nSeg fault here? " << std::endl;
   //                           ^ start here
   alloc(16);
   // print_blocks()();
-
+/*
   // ===========================================================================
   // Best-fit search
 
