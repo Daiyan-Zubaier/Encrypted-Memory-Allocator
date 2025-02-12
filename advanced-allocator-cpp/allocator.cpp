@@ -78,6 +78,7 @@ MemBlock *request_from_OS(std::size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
 void xor_encrypt_decrypt(uintptr_t *data, std::size_t size);
+void print_heap();
 //void print_blocks();
 int main();
 
@@ -131,53 +132,53 @@ FREE
 ------------
 -> Writes to program that the memory block that stores the data is unused
 */
-// void free(uintptr_t *data){
-//   MemBlock *block = get_header(data);
-//   xor_encrypt_decrypt(block->data, get_size(block)); 
- 
-//   if (searchMode != SearchMode::SegregatedList && block->next && !is_used(block->next)){
-//     std::cout << "Im in" << std::endl;
-//     block = coalesce(block);
-//   }
-//   set_used(block, false);
-
-//   if (search_mode == SearchMode::FreeList) {
-//     free_list.push_back(block);
-//   }
-// }
-void free(uintptr_t *data) {
+void free(uintptr_t *data){
   MemBlock *block = get_header(data);
-  std::cout << "[free] Block at: " << block 
-            << " | Size: " << get_size(block) 
-            << " | Used: " << is_used(block) 
-            << " | Next: " << block->next << std::endl;
-
-  if (block->next) {
-      std::cout << "[free] Next Block at: " << block->next 
-                << " | Size: " << get_size(block->next) 
-                << " | Used: " << is_used(block->next) << std::endl;
-  } else {
-      std::cout << "[free] No next block (block->next is nullptr)." << std::endl;
-  }
-
   xor_encrypt_decrypt(block->data, get_size(block)); 
-
-  if (block->next && !is_used(block->next)) {
-      std::cout << "Im in (Coalescing with next block!)" << std::endl;
-      block = coalesce(block);
-  } else {
-      std::cout << "[free] Not coalescing: ";
-      if (!block->next) std::cout << "block->next is null.";
-      else if (is_used(block->next)) std::cout << "Next block is marked as used.";
-      std::cout << std::endl;
+ 
+  if (search_mode != SearchMode::SegregatedList && block->next && !is_used(block->next)){
+    std::cout << "Im in" << std::endl;
+    block = coalesce(block);
   }
-
   set_used(block, false);
 
   if (search_mode == SearchMode::FreeList) {
-      free_list.push_back(block);
+    free_list.push_back(block);
   }
 }
+// void free(uintptr_t *data) {
+//   MemBlock *block = get_header(data);
+//   std::cout << "[free] Block at: " << block 
+//             << " | Size: " << get_size(block) 
+//             << " | Used: " << is_used(block) 
+//             << " | Next: " << block->next << std::endl;
+
+//   if (block->next) {
+//       std::cout << "[free] Next Block at: " << block->next 
+//                 << " | Size: " << get_size(block->next) 
+//                 << " | Used: " << is_used(block->next) << std::endl;
+//   } else {
+//       std::cout << "[free] No next block (block->next is nullptr)." << std::endl;
+//   }
+
+//   xor_encrypt_decrypt(block->data, get_size(block)); 
+
+//   if (block->next && !is_used(block->next)) {
+//       std::cout << "Im in (Coalescing with next block!)" << std::endl;
+//       block = coalesce(block);
+//   } else {
+//       std::cout << "[free] Not coalescing: ";
+//       if (!block->next) std::cout << "block->next is null.";
+//       else if (is_used(block->next)) std::cout << "Next block is marked as used.";
+//       std::cout << std::endl;
+//   }
+
+//   set_used(block, false);
+
+//   if (search_mode == SearchMode::FreeList) {
+//       free_list.push_back(block);
+//   }
+// }
 
 
 /*
@@ -278,14 +279,20 @@ MemBlock *best_fit(std::size_t size){
   std::size_t min {SIZE_MAX};
   MemBlock *min_block {nullptr};
 
-  for(MemBlock *curr = heap_start; curr != nullptr; curr = curr->next){
+  MemBlock *curr = heap_start;
+  while (curr != nullptr) {  
     if(!is_used(curr) && get_size(curr) >= size){
-      if (size < min){
-        min = size;
+      // Find smallest block
+      if (get_size(curr) < min){
+        min = get_size(curr);
         min_block = curr;
       }
     }
+    curr = curr->next;
   }
+
+  //Not found
+  if (min_block == nullptr) {return nullptr;}
 
   return list_allocate(min_block, size);
 }
@@ -321,6 +328,7 @@ MemBlock *seg_list(std::size_t size){
 
   //Restoring status quo
   heap_start = og_heap_start; 
+
   return block;
 }
 /**
@@ -374,10 +382,9 @@ uintptr_t *alloc(std::size_t size){
   set_used(block, true);
 
   if (search_mode == SearchMode::SegregatedList){
-    
     std::size_t size_group = size / sizeof(uintptr_t) - 1;
 
-    if (segregated_starts[size_group]){
+    if (!segregated_starts[size_group]){
       segregated_starts[size_group] = block;
     }
     // Chain the blocks in the bucket.
@@ -609,7 +616,7 @@ int main(){
   // print_blocks()();
 
 
-
+  std::cout << "ALL NEXT FIT TEST CASES PASSED" << std::endl;
 
   // ===========================================================================
   // Best-fit search
@@ -628,8 +635,9 @@ int main(){
   auto z1 = alloc(64);
   alloc(8);
   auto z2 = alloc(16);
+  print_heap();
   // print_blocks()();
-
+  
   // Free the last 16
   free(z2);
 
@@ -640,7 +648,9 @@ int main(){
   // print_blocks()();
 
   // Reuse the last 16 block:
+  print_heap();
   auto z3 = alloc(16);
+  print_heap();
   assert(get_header(z3) == get_header(z2));
 
   // [[8, 1], [64, 0], [8, 1], [16, 1]]
@@ -650,12 +660,14 @@ int main(){
   z3 = alloc(16);
   assert(get_header(z3) == get_header(z1));
 
+  std::cout << "All best fit assertions passed";
+
   // [[8, 1], [16, 1], [24, 0], [8, 1], [16, 1]]
   // print_blocks()();
 
 
 
-  /*
+  
   // ===========================================================================
   // Free-list search
 
@@ -678,6 +690,8 @@ int main(){
   assert(free_list.size() == 0);
   assert(get_header(v1) == get_header(v2));
   // print_blocks()();
+  std::cout << "All free list search assertions passed" << std::endl;
+
 
   // ===========================================================================
   // Segregated-fit search
@@ -687,9 +701,11 @@ int main(){
 
   init(SearchMode::SegregatedList);
 
+  print_heap();
   auto s1 = alloc(3);
   auto s2 = alloc(8);
-
+  
+  print_heap(); 
   assert(get_header(s1) == segregated_starts[0]);
   assert(get_header(s2) == segregated_starts[0]->next);
 
@@ -712,8 +728,9 @@ int main(){
   free(s3);
 
   // print_blocks()();
+  std::cout << "All segregrated list search assertions passed" << std::endl;
 
   puts("\nAll assertions passed!\n");
-*/
+
   return 0;
 }
