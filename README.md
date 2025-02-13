@@ -54,3 +54,5 @@ print_heap();
 
 ## XOR Encryption
 Data stored in allocated blocks is XOR encrypted using a predefined key (0xAA). Encryption/decryption is done in place.
+
+Note: Only supported for linux terminal, MacOS and Windows support coming soon. 
