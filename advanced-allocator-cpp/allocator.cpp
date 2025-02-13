@@ -71,27 +71,26 @@ void init(SearchMode mode) {
 }
 
 //accessor methods
-inline bool is_used(MemBlock *block){
+bool is_used(MemBlock *block){
   return block->header & 1; 
 }
 
-inline void set_used(MemBlock *block, const bool value){
+void set_used(MemBlock *block, const bool value){
   block->header = (value == 0) ? (block->header & ~1UL) : (block->header | 1UL); 
 }
 
-inline std::size_t get_size(MemBlock *block){
+std::size_t get_size(MemBlock *block){
   //Does & with header and 11...1.1..10 
   return block->header & ~1UL;
 }
 
-inline void set_size(MemBlock *block, std::size_t value){
+void set_size(MemBlock *block, std::size_t value){
   block->header = (block->header & 1UL) | (value & ~1UL);
 }
 
 //Does memory allignment
 inline std::size_t allign(std::size_t org_size){
   return (org_size + sizeof(uintptr_t) - 1) & ~(sizeof(uintptr_t) - 1);
-    //return org_size + sizeof(uintptr_t) - org_size % sizeof(uintptr_t);
 }
 
 /*
