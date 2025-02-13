@@ -1,21 +1,56 @@
-# Encrypted Memory Allocator
+# Custom Memory Allocator
 
-This project implements a custom memory allocator in C with XOR encryption to enhance the security of dynamic memory management. The allocator provides functions similar to `malloc` and `free`, with added encryption to protect sensitive data in memory.
+## Overview
+This project implements a custom dynamic memory allocator in C++ with multiple allocation strategies, including **First Fit, Next Fit, Best Fit, Free List, and Segregated List**. It features memory alignment, coalescing, block splitting, and an **XOR-based encryption mechanism** for added security.
 
 ## Features
-- **Custom Memory Allocation**: Implements basic functions for dynamic memory management.
-- **XOR Encryption**: Ensures data security by encrypting memory blocks during allocation.
-- **Performance Optimization**: Balances security and efficiency through optimized algorithms.
+- **Multiple Allocation Strategies**: First Fit, Next Fit, Best Fit, Free List, Segregated List.
+- **Memory Management**: Coalescing adjacent free blocks, explicit free list, and segregated lists for efficiency.
+- **Custom Heap Management**: Uses `sbrk()` to request memory from the OS.
+- **XOR Encryption**: Encrypts/decrypts allocated data to prevent unintended access.
+- **Heap Visualization**: Print function to debug memory layout.
 
-## How to Use
-1. **Clone the repository:**
-   ```bash
-   https://github.com/Daiyan-Zubaier/Encrypted-Memory-Allocator.git```
-2. Navigate to the project directory:
-   `cd encrypted-memory-allocator`
-   
-3. Compile the project:
-   `gcc allocator.c -o allocator.exe`
-   
-4. Run the executable:
-   `./allocator.exe`
+## File Structure
+- **`allocator.cpp`**: Core implementation of the memory allocator.
+- **`allocator.h`**: Header file defining memory block structure and function prototypes.
+- **`alloc_test.cpp`**: Test cases for memory allocation and deallocation.
+
+## Usage
+
+### Initialization
+Before allocation, initialize the allocator with a specific search mode:
+```cpp
+init(SearchMode::FirstFit);
+```
+
+## Memory Allocation
+Allocate memory using:
+```cpp
+uintptr_t *ptr = alloc(64);
+```
+
+## Memory Deallocation
+Free allocated memory:
+```cpp
+free(ptr);
+```
+
+## Heap Visualization
+To inspect the heap layout:
+```cpp
+print_heap();
+```
+
+## Search Modes
+
+| Mode              | Description                                                              |
+|-------------------|--------------------------------------------------------------------------|
+| First Fit         | Finds the first available block that fits the requested size.          |
+| Next Fit          | Similar to First Fit but continues searching from the last allocated block. |
+| Best Fit          | Finds the smallest available block that fits the requested size.       |
+| Free List         | Uses an explicit free list to track free memory.                       |
+| Segregated List   | Uses separate lists for different block sizes.  
+
+
+## XOR Encryption
+Data stored in allocated blocks is XOR encrypted using a predefined key (0xAA). Encryption/decryption is done in place.
