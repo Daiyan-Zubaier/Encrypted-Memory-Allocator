@@ -2,45 +2,36 @@
 #include <unistd.h>
 #include <list>
 #include <iostream>
+#include "allocator.h"
 
 
 //uintptr_t is our system architecture's word size
 
-struct MemBlock{
-    //Info about memory block
+// struct MemBlock{
+//     //Info about memory block
 
-    //OBJECT HEADER
-    std::size_t header; //Check size of block
-    MemBlock *next;
-    //Payload Pointer
-    uintptr_t data[1];
-    
-    
+//     //OBJECT HEADER
+//     std::size_t header; //Check size of block
+//     MemBlock *next;
+//     //Payload Pointer
+//     uintptr_t data[1];
 
-    //Could add a footer 
+//     /*
+//     How memory looks in allocation:
+//     | Object Header | next ptr | data[1] (1 byte) | User Data (variable size) | Buffer (for allignment) |
+//     the slot for data[1] is occupied by the user data
+//     */
+// };
 
-    /*
-    How memory looks in allocation:
-    | Object Header | data[1] (1 byte) | User Data (variable size) | Buffer (for allignment) |
-    the slot for data[1] is occupied by the user data
-    */
-};
 
-enum class SearchMode {
-  FirstFit,
-  NextFit,
-  BestFit,
-  FreeList,
-  SegregatedList
-};
 
 static auto search_mode = SearchMode::FirstFit;
 
 #define XOR_KEY 0xAA                        // Used for encrypting data
 static MemBlock *heap_start = nullptr;      // Start of heap
-static MemBlock *heap_end = heap_start;     // End of heap 
+MemBlock *heap_end = heap_start;     // End of heap 
 static MemBlock *last_block = heap_start;   // Last Successfully allocated block
-static std::list<MemBlock*> free_list;      // Tracks all free blocks
+std::list<MemBlock*> free_list;      // Tracks all free blocks
 
 
 //Segregrated lists data structures
@@ -62,12 +53,7 @@ MemBlock *segregated_ends[] = {
 };
 
 //Function Declarations
-void init(SearchMode mode);
-uintptr_t *alloc(std::size_t size);
-void free(uintptr_t *data);
-void resetHeap();
 MemBlock *find_block(std::size_t size); 
-MemBlock *get_header(uintptr_t *data);
 MemBlock *coalesce (MemBlock *block);
 MemBlock *first_fit(std::size_t size); 
 MemBlock *next_fit(std::size_t size);
@@ -77,10 +63,6 @@ MemBlock *seg_list(std::size_t size);
 MemBlock *request_from_OS(std::size_t size);
 MemBlock *split(MemBlock *block, std::size_t size);
 MemBlock *list_allocate(MemBlock *block, std::size_t size);
-void xor_encrypt_decrypt(uintptr_t *data, std::size_t size);
-void print_heap();
-//void print_blocks();
-int main();
 
 
 void init(SearchMode mode) {
@@ -146,40 +128,6 @@ void free(uintptr_t *data){
     free_list.push_back(block);
   }
 }
-// void free(uintptr_t *data) {
-//   MemBlock *block = get_header(data);
-//   std::cout << "[free] Block at: " << block 
-//             << " | Size: " << get_size(block) 
-//             << " | Used: " << is_used(block) 
-//             << " | Next: " << block->next << std::endl;
-
-//   if (block->next) {
-//       std::cout << "[free] Next Block at: " << block->next 
-//                 << " | Size: " << get_size(block->next) 
-//                 << " | Used: " << is_used(block->next) << std::endl;
-//   } else {
-//       std::cout << "[free] No next block (block->next is nullptr)." << std::endl;
-//   }
-
-//   xor_encrypt_decrypt(block->data, get_size(block)); 
-
-//   if (block->next && !is_used(block->next)) {
-//       std::cout << "Im in (Coalescing with next block!)" << std::endl;
-//       block = coalesce(block);
-//   } else {
-//       std::cout << "[free] Not coalescing: ";
-//       if (!block->next) std::cout << "block->next is null.";
-//       else if (is_used(block->next)) std::cout << "Next block is marked as used.";
-//       std::cout << std::endl;
-//   }
-
-//   set_used(block, false);
-
-//   if (search_mode == SearchMode::FreeList) {
-//       free_list.push_back(block);
-//   }
-// }
-
 
 /*
 Coalescing, when freeing a block, check for adjacent free blocks
@@ -472,265 +420,4 @@ void print_heap() {
                 << std::endl;
   }
   std::cout << "---------------------\n";
-}
-
-//Test cases move to test.cpp later
-int main(){
-  std::cout << "=======================================================\n";
-  std::cout << "# First-fit search\n\n";
-  
-
-  // --------------------------------------
-  // Test case 1: Alignment
-  //
-  // A request for 3 bytes is aligned to 8.
-  //
-
-  auto p1 = alloc(3);
-  auto p1b = get_header(p1);
-
-  assert(get_size(p1b) == sizeof(uintptr_t));
-  free(p1);
-
-  //// print_blocks()();
-
-  // --------------------------------------
-  // Test case 2: Exact amount of aligned bytes
-  //
-
-  auto p2 = alloc(8);
-  auto p2b = get_header(p2);
-  assert(get_size(p2b) == 8);
-  
-
- // // print_blocks()();
-
-  // --------------------------------------
-  // Test case 3: Free the object
-  //
-  // The pointer to the reclaimed block is added
-  // to the free list.
-  //
-
-  free(p2);
-  assert(is_used(p2b) == false);
-
- // // print_blocks()();
-
-  // --------------------------------------
-  // Test case 4: The block is reused
-  //
-  // A consequent allocation of the same size reuses
-  // the previously freed block.
-  //
-
-  auto p3 = alloc(8);
-  auto p3b = get_header(p3);
-  assert(get_size(p3b) == 8);
-  assert(p3b == p2b);  // Reused!
-  free(p3);
-
-
-  auto p4 = alloc(8);
-  auto p4b = get_header(p4);
-  assert(get_size(p4b) == 8);
-
-  auto p5 = alloc(8);
-  assert(get_size(get_header(p5)) == 8);
-  
-
-  free(p5);
-  free(p4);
-  // Only one free block with size 16.
-  assert(get_size(get_header(p4)) == 16);
-  
-  print_heap();
-  auto p6 = alloc(16);
-  auto p6b = get_header(p6);
-  assert(p6b == p4b);  // Reused!
-  assert(get_size(p6b) == 16);
-  
-
-  print_heap();
-  auto p7 = alloc(128);
-  
-  auto p7b = get_header(p7);
-  assert(get_size(p7b)== 128);
-  
-//  // print_blocks()();
-
-  free(p7);
-
-//  // print_blocks()();
-  
-  print_heap();
-  auto p8 = alloc(8);
-  auto p8b = get_header(p8);
-  assert(p8b == p7b);
-  assert(get_size(p8b) == 8);
-
-  std::cout << "ALL FIRST FIT TEST CASES PASSED" << std::endl;
-
-  print_heap();
-
-
-
-  // ===========================================================================
-  // Next-fit search
-
-  std::cout << "\n=======================================================\n";
-  std::cout << "# Next-fit search\n\n";
-
-  init(SearchMode::NextFit);
-
-  // --------------------------------------
-  // Test case 5: Next search start position
-  //
-
-  // [[8, 1], [8, 1], [8, 1]]
-  alloc(8);
-  alloc(8);
-  alloc(8);
-  print_heap();
-
-  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
-  auto o1 = alloc(16);
-  auto o2 = alloc(16);
-  // print_blocks()();
-
-  // [[8, 1], [8, 1], [8, 1], [16, 0], [16, 0]]
-  free(o1);
-  free(o2);
-  // print_blocks()();
-
-  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 0]]
-  auto o3 = alloc(16);
-  // print_blocks()();
-
-  // Start position from o3:
-  assert(heap_end == get_header(o3));
-
-  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
-  //                           ^ start here
-  alloc(16);
-  // print_blocks()();
-
-
-  std::cout << "ALL NEXT FIT TEST CASES PASSED" << std::endl;
-
-  // ===========================================================================
-  // Best-fit search
-
-  std::cout << "\n=======================================================\n";
-  std::cout << "# Best-fit search\n\n";
-
-  init(SearchMode::BestFit);
-
-  // --------------------------------------
-  // Test case 6: Best-fit search
-  //
-
-  // [[8, 1], [64, 1], [8, 1], [16, 1]]
-  alloc(8);
-  auto z1 = alloc(64);
-  alloc(8);
-  auto z2 = alloc(16);
-  print_heap();
-  // print_blocks()();
-  
-  // Free the last 16
-  free(z2);
-
-  // Free 64:
-  free(z1);
-
-  // [[8, 1], [64, 0], [8, 1], [16, 0]]
-  // print_blocks()();
-
-  // Reuse the last 16 block:
-  print_heap();
-  auto z3 = alloc(16);
-  print_heap();
-  assert(get_header(z3) == get_header(z2));
-
-  // [[8, 1], [64, 0], [8, 1], [16, 1]]
-  // print_blocks()();
-
-  // Reuse 64, splitting it to 16, and 24 (considering header)
-  z3 = alloc(16);
-  assert(get_header(z3) == get_header(z1));
-
-  std::cout << "All best fit assertions passed";
-
-  // [[8, 1], [16, 1], [24, 0], [8, 1], [16, 1]]
-  // print_blocks()();
-
-
-
-  
-  // ===========================================================================
-  // Free-list search
-
-  std::cout << "\n=======================================================\n";
-  std::cout << "# Free-list search\n\n";
-
-  init(SearchMode::FreeList);
-
-  alloc(8);
-  alloc(8);
-  auto v1 = alloc(16);
-  alloc(8);
-  // print_blocks()();
-
-  free(v1);
-  assert(free_list.size() == 1);
-  // print_blocks()();
-
-  auto v2 = alloc(16);
-  assert(free_list.size() == 0);
-  assert(get_header(v1) == get_header(v2));
-  // print_blocks()();
-  std::cout << "All free list search assertions passed" << std::endl;
-
-
-  // ===========================================================================
-  // Segregated-fit search
-
-  std::cout << "\n=======================================================\n";
-  std::cout << "# Segregated-list search\n\n";
-
-  init(SearchMode::SegregatedList);
-
-  print_heap();
-  auto s1 = alloc(3);
-  auto s2 = alloc(8);
-  
-  print_heap(); 
-  assert(get_header(s1) == segregated_starts[0]);
-  assert(get_header(s2) == segregated_starts[0]->next);
-
-  // print_blocks()();
-
-  auto s3 = alloc(16);
-  assert(get_header(s3) == segregated_starts[1]);
-  // print_blocks()();
-
-  auto s4 = alloc(8);
-  assert(get_header(s4) == segregated_starts[0]->next->next);
-  // print_blocks()();
-
-  auto s5 = alloc(32);
-  assert(get_header(s5) == segregated_starts[3]);
-  // print_blocks()();
-
-  free(s1);
-  free(s2);
-  free(s3);
-
-  // print_blocks()();
-  std::cout << "All segregrated list search assertions passed" << std::endl;
-
-  puts("\nAll assertions passed!\n");
-
-  return 0;
 }
